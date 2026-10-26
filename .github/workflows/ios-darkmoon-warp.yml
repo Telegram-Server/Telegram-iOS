@@ -1,0 +1,197 @@
+name: iOS DarkMoon (WarpBuild).
+
+# 只手动触发，跑在 WarpBuild 的 Apple 芯片 macOS 运行器上（按分钟计费）。
+#
+# 产物：Release darkmoon-build-<构建号>，附件：
+#   DarkMoon-<构建号>-unsigned.ipa  用自签名占位证书签的包，装不到任何设备上，
+#                                   要由持有企业证书的负责人重签（docs/telesrv-signing.md）。
+#   DarkMoon-<构建号>-signing.txt   包里每个 bundle 的 bundle id 和 App Group，重签时对照。
+#
+# 不需要任何签名 Secret：占位描述文件由 build-system/Make/PlaceholderCodesigning.py 在运行器上
+# 用仓库自带的 build-system/fake-codesigning/certs/SelfSigned.p12 现场生成。
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "WarpBuild 运行器：12x 更快，单价是 6x 的两倍，总价接近"
+        type: choice
+        options:
+          - warp-macos-26-arm64-12x
+          - warp-macos-26-arm64-6x
+        default: warp-macos-26-arm64-12x
+      include_extensions:
+        description: "打包扩展（分享、通知、Siri、小组件、录屏）。关掉时负责人只需要签主 App 一个 bundle"
+        type: boolean
+        default: false
+      continue_on_error:
+        description: "遇到编译错误继续编其余部分（一次列出所有错误，修代码阶段建议打开）"
+        type: boolean
+        default: true
+
+# 创建 Release 需要写权限。
+permissions:
+  contents: write
+
+jobs:
+
+  ios:
+    name: iOS
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 360
+
+    env:
+      CONFIGURATION_PATH: build-system/darkmoon-configuration.json
+      # Bazel 磁盘缓存，跨次构建复用；第一次构建之后会快很多。
+      BAZEL_CACHE_DIR: /Users/Shared/telegram-bazel-cache
+      # 固定的 Bazel 输出根目录，让缓存里的路径在不同运行之间保持一致。
+      BAZEL_USER_ROOT: /private/var/tmp/_bazel_darkmoon
+      # 构建号：每次运行递增，iOS 靠它判断新旧版本。
+      BUILD_NUMBER: ${{ github.run_number }}
+
+    steps:
+      - name: Clone.
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Select Xcode.
+        run: |
+          # 优先用 versions.json 要求的版本，镜像里没有就取最新的一个，
+          # Make.py 带 --overrideXcodeVersion 会接受实际版本。
+          REQUIRED=$(python3 -c 'import json;print(json.load(open("versions.json"))["xcode"])')
+          if [ -d "/Applications/Xcode_$REQUIRED.app" ]; then
+            XCODE="/Applications/Xcode_$REQUIRED.app"
+          elif [ -d /Applications/Xcode.app ]; then
+            XCODE=/Applications/Xcode.app
+          else
+            XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          fi
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          echo "Required Xcode $REQUIRED, using $XCODE"
+          xcodebuild -version
+
+          # Disable spotlight.
+          sudo mdutil -a -i off || true
+
+          XCODE_VERSION=$(xcodebuild -version | head -1 | awk '{ print $2 }')
+          echo "CACHE_KEY_PREFIX=ios-darkmoon-bazel-v1-xcode$XCODE_VERSION-" >> $GITHUB_ENV
+
+      # 拆成 restore / save 两步：即使编译失败，已经编好的部分也会保存下来，
+      # 下次修完代码再编只需要重编改动的部分。
+      - name: Bazel cache restore.
+        id: cache-bazel
+        uses: WarpBuilds/cache/restore@v2
+        with:
+          path: ${{ env.BAZEL_CACHE_DIR }}
+          key: ${{ env.CACHE_KEY_PREFIX }}${{ github.sha }}
+          restore-keys: ${{ env.CACHE_KEY_PREFIX }}
+
+      - name: Provide placeholder signing material.
+        run: |
+          CODESIGN_DIR="$RUNNER_TEMP/codesign"
+          mkdir -p "$CODESIGN_DIR"
+          echo "CODESIGN_DIR=$CODESIGN_DIR" >> $GITHUB_ENV
+
+          # 构建用的临时钥匙串，加入搜索列表，codesign 才找得到签名身份。
+          KEYCHAIN="$RUNNER_TEMP/darkmoon.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          echo "KEYCHAIN=$KEYCHAIN" >> $GITHUB_ENV
+
+          # 生成占位描述文件，并把 SelfSigned.p12 导入上面的钥匙串。
+          python3 -u build-system/Make/PlaceholderCodesigning.py \
+            --configurationPath="$CONFIGURATION_PATH" \
+            --destination="$CODESIGN_DIR" \
+            --keychain="$KEYCHAIN" \
+            --keychainPassword="$KEYCHAIN_PASSWORD"
+          ls -R "$CODESIGN_DIR"
+
+          # 自签名证书默认不受信任，codesign 只认受信任的身份（find-identity -v），
+          # 所以在运行器上把它设为代码签名可信。运行器是一次性的，这个设置随机器销毁。
+          CERT_PEM="$RUNNER_TEMP/placeholder-cert.pem"
+          openssl pkcs12 -in build-system/fake-codesigning/certs/SelfSigned.p12 -passin pass: -nokeys -out "$CERT_PEM" \
+            || openssl pkcs12 -in build-system/fake-codesigning/certs/SelfSigned.p12 -passin pass: -nokeys -legacy -out "$CERT_PEM"
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain "$CERT_PEM"
+
+          security find-identity -v -p codesigning "$KEYCHAIN"
+          if ! security find-identity -v -p codesigning "$KEYCHAIN" | grep -q "SELFSIGNED\|Telegram FZ-LLC"; then
+            echo "::error::The placeholder signing identity is not usable for code signing."
+            exit 1
+          fi
+
+      - name: Build.
+        id: build
+        run: |
+          mkdir -p "$BAZEL_CACHE_DIR"
+          python3 -u build-system/Make/Make.py \
+            --overrideXcodeVersion \
+            --bazelUserRoot="$BAZEL_USER_ROOT" \
+            --cacheDir="$BAZEL_CACHE_DIR" \
+            build \
+            ${{ inputs.continue_on_error && '--continueOnError' || '' }} \
+            ${{ !inputs.include_extensions && '--disableExtensions' || '' }} \
+            --configurationPath="$CONFIGURATION_PATH" \
+            --codesigningInformationPath="$CODESIGN_DIR" \
+            --configuration=release_arm64 \
+            --buildNumber="$BUILD_NUMBER" \
+            --outputBuildArtifactsPath="$RUNNER_TEMP/artifacts"
+
+      - name: Bazel cache save.
+        if: always() && steps.build.outcome != 'skipped' && steps.cache-bazel.outputs.cache-hit != 'true'
+        uses: WarpBuilds/cache/save@v2
+        with:
+          path: ${{ env.BAZEL_CACHE_DIR }}
+          key: ${{ env.CACHE_KEY_PREFIX }}${{ github.sha }}
+
+      - name: Describe the IPA for re-signing.
+        run: |
+          IPA_SOURCE="$RUNNER_TEMP/artifacts/Telegram.ipa"
+          STAGE="$RUNNER_TEMP/ipa-contents"
+          rm -rf "$STAGE" && mkdir -p "$STAGE"
+          unzip -q "$IPA_SOURCE" -d "$STAGE"
+          APP=$(ls -d "$STAGE"/Payload/*.app | head -1)
+
+          SIGNING_TXT="$RUNNER_TEMP/DarkMoon-$BUILD_NUMBER-signing.txt"
+          {
+            echo "DarkMoon build $BUILD_NUMBER (commit $GITHUB_SHA)"
+            echo "This IPA is signed with a self-signed placeholder and installs nowhere."
+            echo "Re-sign every bundle below with a profile for exactly its bundle id."
+            echo "Every App ID needs the App Group group.$(python3 -c 'import json;print(json.load(open("'"$CONFIGURATION_PATH"'"))["bundle_id"])')."
+            echo
+            echo "Bundles (path in the .app -> bundle id):"
+            find "$APP" -maxdepth 3 -name Info.plist | while read PLIST; do
+              DIR=$(dirname "$PLIST")
+              case "$DIR" in
+                *.app|*.appex)
+                  ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$PLIST" 2>/dev/null)
+                  echo "  ${DIR#$STAGE/} -> $ID"
+                  ;;
+              esac
+            done
+            echo
+            echo "Version: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist") ($(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist"))"
+          } > "$SIGNING_TXT"
+          cat "$SIGNING_TXT"
+          echo "SIGNING_TXT=$SIGNING_TXT" >> $GITHUB_ENV
+
+      - name: Publish IPA.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          IPA="$RUNNER_TEMP/DarkMoon-$BUILD_NUMBER-unsigned.ipa"
+          cp "$RUNNER_TEMP/artifacts/Telegram.ipa" "$IPA"
+          gh release create "darkmoon-build-$BUILD_NUMBER" "$IPA" "$SIGNING_TXT" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "DarkMoon build $BUILD_NUMBER (unsigned)" \
+            --notes "分支 ${GITHUB_REF_NAME}，提交 ${GITHUB_SHA}。占位签名，装不上设备，需要用企业证书重签，见 docs/telesrv-signing.md。"
+
+      - name: Clean up signing material.
+        if: always()
+        run: |
+          [ -n "$KEYCHAIN" ] && security delete-keychain "$KEYCHAIN" || true
+          rm -rf "$RUNNER_TEMP/codesign"

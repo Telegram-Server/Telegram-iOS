@@ -33,6 +33,13 @@
 
 整个分支只在 Windows 上写成，**一次都没有编译过**，下面的验证全部要在 Mac 上做。
 
+## 编译和签名
+
+不在本地编译：CI 用 WarpBuild（`.github/workflows/ios-darkmoon-warp.yml`，手动触发），产出用自签名占位证书签的
+ipa，由持有企业证书的负责人重签（`docs/telesrv-signing.md`）。占位描述文件由 `build-system/Make/PlaceholderCodesigning.py`
+在运行器上现场生成，不需要任何签名 Secret。默认不打包扩展（`Make.py build --disableExtensions`），负责人只签
+`cc.darkmoon` 一个 bundle。
+
 ## 在 Mac 上要验证的
 
 1. `Make.py build --continueOnError`（`--configurationPath build-system/darkmoon-configuration.json`，签名用
