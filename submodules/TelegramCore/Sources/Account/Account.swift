@@ -200,19 +200,14 @@ public class UnauthorizedAccount {
         // ahead (by the engine, over whatever route works); MtProtoKit's temporary keys would only add
         // TCP connections on a network that blocks it.
         let prefetchedSelector: MTDatacenterAuthInfoSelector = network.engineKind == .rust ? .persistent : .ephemeralMain
+        // Self-hosted telesrv has one backend, so only the datacenter the login runs on is prefetched:
+        // keys made under the other ids would be further keys with the same server. No backup address
+        // discovery is started (see TelesrvServer).
         network.context.performBatchUpdates({
-            var datacenterIds: [Int] = [1, 2]
-            if testingEnvironment {
-                datacenterIds = [3]
-            } else {
-                datacenterIds.append(contentsOf: [4])
+            let id = network.datacenterId
+            if network.context.authInfoForDatacenter(withId: id, selector: .persistent) == nil {
+                network.context.authInfoForDatacenter(withIdRequired: id, isCdn: false, selector: prefetchedSelector, allowUnboundEphemeralKeys: false)
             }
-            for id in datacenterIds {
-                if network.context.authInfoForDatacenter(withId: id, selector: .persistent) == nil {
-                    network.context.authInfoForDatacenter(withIdRequired: id, isCdn: false, selector: prefetchedSelector, allowUnboundEphemeralKeys: false)
-                }
-            }
-            network.context.beginExplicitBackupAddressDiscovery()
         })
         
         // Nothing is authorized yet, so a permanent key the server no longer knows is replaced rather than
@@ -392,12 +387,8 @@ public func accountWithId(accountManager: AccountManager<TelegramAccountManagerT
                             }
                         }
                         
-                        #if DEBUG
-                        let initialDatacenterId: Int = 1
-                        #else
-                        let initialDatacenterId: Int = 2
-                        #endif
-                        
+                        let initialDatacenterId: Int = TelesrvServer.initialDatacenterId
+
                         return initializedNetwork(accountId: id, arguments: networkArguments, supplementary: supplementary, datacenterId: initialDatacenterId, keychain: keychain, basePath: path, testingEnvironment: beginWithTestingEnvironment, languageCode: localizationSettings?.primaryComponent.languageCode, proxySettings: proxySettings, networkSettings: networkSettings, networkEngine: networkEngine, phoneNumber: nil, useRequestTimeoutTimers: useRequestTimeoutTimers, appConfiguration: appConfig)
                         |> map { network -> AccountResult in
                             return .unauthorized(UnauthorizedAccount(accountManager: accountManager, networkArguments: networkArguments, id: id, rootPath: rootPath, basePath: path, testingEnvironment: beginWithTestingEnvironment, postbox: postbox, network: network, shouldKeepAutoConnection: shouldKeepAutoConnection))

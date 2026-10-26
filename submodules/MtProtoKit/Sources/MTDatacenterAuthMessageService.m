@@ -50,37 +50,24 @@
 @end
 
 static NSArray<MTDatacenterAuthPublicKey *> *defaultPublicKeys(bool isProduction) {
-    static NSArray<MTDatacenterAuthPublicKey *> *testingPublicKeys = nil;
-    static NSArray<MTDatacenterAuthPublicKey *> *productionPublicKeys = nil;
+    // Self-hosted telesrv server key (fingerprint 0x5d729d647fa6567c), for the production and testing
+    // environments alike: the server has one backend.
+    (void)isProduction;
+    static NSArray<MTDatacenterAuthPublicKey *> *publicKeys = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        testingPublicKeys = @[
+        publicKeys = @[
             [[MTDatacenterAuthPublicKey alloc] initWithPublicKey:@"-----BEGIN RSA PUBLIC KEY-----\n"
-             "MIIBCgKCAQEAyMEdY1aR+sCR3ZSJrtztKTKqigvO/vBfqACJLZtS7QMgCGXJ6XIR\n"
-             "yy7mx66W0/sOFa7/1mAZtEoIokDP3ShoqF4fVNb6XeqgQfaUHd8wJpDWHcR2OFwv\n"
-             "plUUI1PLTktZ9uW2WE23b+ixNwJjJGwBDJPQEQFBE+vfmH0JP503wr5INS1poWg/\n"
-             "j25sIWeYPHYeOrFp/eXaqhISP6G+q2IeTaWTXpwZj4LzXq5YOpk4bYEQ6mvRq7D1\n"
-             "aHWfYmlEGepfaYR8Q0YqvvhYtMte3ITnuSJs171+GDqpdKcSwHnd6FudwGO4pcCO\n"
-             "j4WcDuXc2CTHgH8gFTNhp/Y8/SpDOhvn9QIDAQAB\n"
-             "-----END RSA PUBLIC KEY-----"]
-        ];
-
-        productionPublicKeys = @[
-            [[MTDatacenterAuthPublicKey alloc] initWithPublicKey:@"-----BEGIN RSA PUBLIC KEY-----\n"
-             "MIIBCgKCAQEA6LszBcC1LGzyr992NzE0ieY+BSaOW622Aa9Bd4ZHLl+TuFQ4lo4g\n"
-             "5nKaMBwK/BIb9xUfg0Q29/2mgIR6Zr9krM7HjuIcCzFvDtr+L0GQjae9H0pRB2OO\n"
-             "62cECs5HKhT5DZ98K33vmWiLowc621dQuwKWSQKjWf50XYFw42h21P2KXUGyp2y/\n"
-             "+aEyZ+uVgLLQbRA1dEjSDZ2iGRy12Mk5gpYc397aYp438fsJoHIgJ2lgMv5h7WY9\n"
-             "t6N/byY9Nw9p21Og3AoXSL2q/2IJ1WRUhebgAdGVMlV1fkuOQoEzR7EdpqtQD9Cs\n"
-             "5+bfo3Nhmcyvk5ftB0WkJ9z6bNZ7yxrP8wIDAQAB\n"
+             "MIIBCgKCAQEAtPlt6U0dU1qqkVJx7m5gBKr5Iy1vUB7+IsX1qiM0uwGVBNUuMEWW\n"
+             "DyMaEWxFWWBGne10mgZyIQ6Q3nf/tKP81LYJvvIsDcxrD3U8JLTJJ5UJGL2ACF0J\n"
+             "h/DQ9zLJBf/qlxurKDiPpO3dszYhYsYH5V+17Xqm7+mzdloCViHfDIbL3wZ3n18R\n"
+             "JtmuWWHlGrMEc9hnGUgiuu3bPMCNHY4Dxau7t2bWIg9YIS//+i5+rhbtJnP0RpBy\n"
+             "vzlESMCcXdqND3l4VPXhGKBl5RYoJuht/901xnnGOf6lrsHUsRZbtd85+iN5UGYZ\n"
+             "Jp6IPTpi4fUiCQGGM5qBga0rd5Tt/krUswIDAQAB\n"
              "-----END RSA PUBLIC KEY-----"]
         ];
     });
-    if (isProduction) {
-        return productionPublicKeys;
-    } else {
-        return testingPublicKeys;
-    }
+    return publicKeys;
 }
 
 NSArray<NSString *> *MTDatacenterAuthDefaultPublicKeys(bool isProduction) {
