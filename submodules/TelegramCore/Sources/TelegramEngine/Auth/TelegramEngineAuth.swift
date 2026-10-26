@@ -102,6 +102,17 @@ public extension TelegramEngine {
             return _internal_updateTwoStepVerificationPassword(network: self.account.network, currentPassword: currentPassword, updatedPassword: updatedPassword)
         }
 
+        /// Whether the account has a telesrv login password (`telesrv.getMyLoginPassword`).
+        public func telesrvLoginPasswordState() -> Signal<TelesrvLoginPasswordState, TelesrvLoginPasswordError> {
+            return _internal_telesrvLoginPasswordState(network: self.account.network)
+        }
+
+        /// Sets, changes, resets or removes the telesrv login password; see
+        /// `_internal_telesrvUpdateLoginPassword`.
+        public func telesrvUpdateLoginPassword(currentPassword: String?, newPassword: String?) -> Signal<Never, TelesrvLoginPasswordError> {
+            return _internal_telesrvUpdateLoginPassword(network: self.account.network, currentPassword: currentPassword, newPassword: newPassword)
+        }
+
         public func deleteAccount(reason: String, password: String?) -> Signal<Never, DeleteAccountError> {
             let network = self.account.network
             

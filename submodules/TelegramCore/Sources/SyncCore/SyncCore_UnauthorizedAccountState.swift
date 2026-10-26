@@ -140,6 +140,9 @@ private enum UnauthorizedAccountStateContentsValue: Int32 {
     case passwordRecovery = 6
     case awaitingAccountReset = 7
     case payment = 8
+    // 9 and 10 are the telesrv login password states. 4 was never used; leave it unassigned.
+    case loginPasswordEntry = 9
+    case loginPasswordSignUp = 10
 }
 
 public struct UnauthorizedAccountTermsOfService: PostboxCoding, Equatable {
@@ -183,6 +186,11 @@ public indirect enum UnauthorizedAccountStateContents: PostboxCoding, Equatable 
     case awaitingAccountReset(protectedUntil: Int32, number: String?, syncContacts: Bool)
     case signUp(number: String, codeHash: String, firstName: String, lastName: String, termsOfService: UnauthorizedAccountTermsOfService?, syncContacts: Bool)
     case payment(number: String, codeHash: String, storeProduct: String, premiumDays: Int32, supportEmailAddress: String, supportEmailSubject: String, syncContacts: Bool)
+    /// Sign-in with a telesrv login password. The SRP challenge is not stored: it is single-use,
+    /// expires after five minutes and belongs to the auth key, so each submission fetches a fresh one.
+    case loginPasswordEntry(number: String, syncContacts: Bool)
+    /// Sign-up with a telesrv login password, for a number the server has no account for.
+    case loginPasswordSignUp(number: String, syncContacts: Bool)
     
     public init(decoder: PostboxDecoder) {
         switch decoder.decodeInt32ForKey("v", orElse: 0) {
@@ -218,6 +226,10 @@ public indirect enum UnauthorizedAccountStateContents: PostboxCoding, Equatable 
                 self = .signUp(number: decoder.decodeStringForKey("n", orElse: ""), codeHash: decoder.decodeStringForKey("h", orElse: ""), firstName: decoder.decodeStringForKey("f", orElse: ""), lastName: decoder.decodeStringForKey("l", orElse: ""), termsOfService: decoder.decodeObjectForKey("tos", decoder: { UnauthorizedAccountTermsOfService(decoder: $0) }) as? UnauthorizedAccountTermsOfService, syncContacts: decoder.decodeInt32ForKey("syncContacts", orElse: 1) != 0)
             case UnauthorizedAccountStateContentsValue.payment.rawValue:
                 self = .payment(number: decoder.decodeStringForKey("n", orElse: ""), codeHash: decoder.decodeStringForKey("h", orElse: ""), storeProduct: decoder.decodeStringForKey("storeProduct", orElse: ""), premiumDays: decoder.decodeInt32ForKey("premiumDays", orElse: 7), supportEmailAddress: decoder.decodeStringForKey("supportEmailAddress", orElse: ""), supportEmailSubject: decoder.decodeStringForKey("supportEmailSubject", orElse: ""), syncContacts: decoder.decodeInt32ForKey("syncContacts", orElse: 1) != 0)
+            case UnauthorizedAccountStateContentsValue.loginPasswordEntry.rawValue:
+                self = .loginPasswordEntry(number: decoder.decodeStringForKey("n", orElse: ""), syncContacts: decoder.decodeInt32ForKey("syncContacts", orElse: 1) != 0)
+            case UnauthorizedAccountStateContentsValue.loginPasswordSignUp.rawValue:
+                self = .loginPasswordSignUp(number: decoder.decodeStringForKey("n", orElse: ""), syncContacts: decoder.decodeInt32ForKey("syncContacts", orElse: 1) != 0)
             default:
                 assertionFailure()
                 self = .empty
@@ -316,6 +328,14 @@ public indirect enum UnauthorizedAccountStateContents: PostboxCoding, Equatable 
                 encoder.encodeString(supportEmailAddress, forKey: "supportEmailAddress")
                 encoder.encodeString(supportEmailSubject, forKey: "supportEmailSubject")
                 encoder.encodeInt32(syncContacts ? 1 : 0, forKey: "syncContacts")
+            case let .loginPasswordEntry(number, syncContacts):
+                encoder.encodeInt32(UnauthorizedAccountStateContentsValue.loginPasswordEntry.rawValue, forKey: "v")
+                encoder.encodeString(number, forKey: "n")
+                encoder.encodeInt32(syncContacts ? 1 : 0, forKey: "syncContacts")
+            case let .loginPasswordSignUp(number, syncContacts):
+                encoder.encodeInt32(UnauthorizedAccountStateContentsValue.loginPasswordSignUp.rawValue, forKey: "v")
+                encoder.encodeString(number, forKey: "n")
+                encoder.encodeInt32(syncContacts ? 1 : 0, forKey: "syncContacts")
         }
     }
     
@@ -389,6 +409,18 @@ public indirect enum UnauthorizedAccountStateContents: PostboxCoding, Equatable 
                 }
             case let .payment(number, codeHash, storeProduct, premiumDays, supportEmailAddress, supportEmailSubject, syncContacts):
                 if case .payment(number, codeHash, storeProduct, premiumDays, supportEmailAddress, supportEmailSubject, syncContacts) = rhs {
+                    return true
+                } else {
+                    return false
+                }
+            case let .loginPasswordEntry(number, syncContacts):
+                if case .loginPasswordEntry(number, syncContacts) = rhs {
+                    return true
+                } else {
+                    return false
+                }
+            case let .loginPasswordSignUp(number, syncContacts):
+                if case .loginPasswordSignUp(number, syncContacts) = rhs {
                     return true
                 } else {
                     return false

@@ -75,15 +75,15 @@ final class ProxySettingsTests: XCTestCase {
         let settings = try XCTUnwrap(parseWebProxySettingsLink("tg://webproxy?server=PROXY.EXAMPLE.COM&secret=\(secret)"))
         XCTAssertEqual(settings.host, "proxy.example.com")
         XCTAssertEqual(settings.port, 443)
-        XCTAssertEqual(webProxySettingsLink(settings), "https://t.me/webproxy?server=proxy.example.com&secret=\(secret)")
+        XCTAssertEqual(webProxySettingsLink(settings), "https://darkmoon.cc/webproxy?server=proxy.example.com&secret=\(secret)")
         XCTAssertEqual(parseWebProxySettingsLink(try XCTUnwrap(webProxySettingsLink(settings))), settings)
 
-        XCTAssertNil(parseWebProxySettingsLink("https://t.me/webproxy?server=proxy.example.com&server=other.example.com&secret=\(secret)"))
+        XCTAssertNil(parseWebProxySettingsLink("https://darkmoon.cc/webproxy?server=proxy.example.com&server=other.example.com&secret=\(secret)"))
         // Unknown items and a trailing "&" are ignored rather than making the link dead.
-        XCTAssertEqual(parseWebProxySettingsLink("https://t.me/webproxy?server=proxy.example.com&secret=\(secret)&extra=1"), settings)
-        XCTAssertEqual(parseWebProxySettingsLink("https://t.me/webproxy?server=proxy.example.com&secret=\(secret)&"), settings)
-        XCTAssertNil(parseWebProxySettingsLink("https://t.me:8443/webproxy?server=proxy.example.com&secret=\(secret)"))
-        XCTAssertNil(parseWebProxySettingsLink("https://user@t.me/webproxy?server=proxy.example.com&secret=\(secret)"))
+        XCTAssertEqual(parseWebProxySettingsLink("https://darkmoon.cc/webproxy?server=proxy.example.com&secret=\(secret)&extra=1"), settings)
+        XCTAssertEqual(parseWebProxySettingsLink("https://darkmoon.cc/webproxy?server=proxy.example.com&secret=\(secret)&"), settings)
+        XCTAssertNil(parseWebProxySettingsLink("https://darkmoon.cc:8443/webproxy?server=proxy.example.com&secret=\(secret)"))
+        XCTAssertNil(parseWebProxySettingsLink("https://user@darkmoon.cc/webproxy?server=proxy.example.com&secret=\(secret)"))
         XCTAssertNil(parseWebProxySettingsLink("tg://webproxy?server=proxy.example.com%2F%2Fpath&secret=\(secret)"))
         XCTAssertNil(parseWebProxySettingsLink("tg://webproxy?server=proxy.example.com%2Fpa.th&secret=\(secret)"))
         XCTAssertNil(parseWebProxySettingsLink("tg://webproxy?server=proxy.example.com&secret=00"))
@@ -100,7 +100,7 @@ final class ProxySettingsTests: XCTestCase {
         }
         // A regular proxy link must never resolve through the WEB parser.
         XCTAssertNil(parseWebProxySettingsLink("tg://proxy?server=proxy.example.com&port=443&secret=\(secret)"))
-        XCTAssertNil(parseWebProxySettingsLink("https://t.me/proxy?server=proxy.example.com&port=443&secret=\(secret)"))
+        XCTAssertNil(parseWebProxySettingsLink("https://darkmoon.cc/proxy?server=proxy.example.com&port=443&secret=\(secret)"))
     }
 
     func testWebProxyLinkAcceptsADdPaddedSecret() throws {
@@ -113,25 +113,25 @@ final class ProxySettingsTests: XCTestCase {
     /// always use `server`." Real deployments emit the `host` form.
     func testWebProxyLinkAcceptsHostAsALegacyAliasForServer() throws {
         let secret = "dddeb5753b0a4ee7043f5ad53c9da03cee"
-        let viaHost = try XCTUnwrap(parseWebProxySettingsLink("https://t.me/webproxy?host=tproxy.remindbot.ai&secret=\(secret)"))
+        let viaHost = try XCTUnwrap(parseWebProxySettingsLink("https://darkmoon.cc/webproxy?host=tproxy.remindbot.ai&secret=\(secret)"))
         XCTAssertEqual(viaHost.host, "tproxy.remindbot.ai")
         XCTAssertEqual(viaHost.port, 443)
         XCTAssertEqual(viaHost.connection, .web(secret: try XCTUnwrap(parseWebProxySecret(secret)), path: ""))
         XCTAssertEqual(webProxySecretString(try XCTUnwrap(parseWebProxySecret(secret))), secret)
 
-        let viaServer = try XCTUnwrap(parseWebProxySettingsLink("https://t.me/webproxy?server=tproxy.remindbot.ai&secret=\(secret)"))
+        let viaServer = try XCTUnwrap(parseWebProxySettingsLink("https://darkmoon.cc/webproxy?server=tproxy.remindbot.ai&secret=\(secret)"))
         XCTAssertEqual(viaHost, viaServer)
 
         // tg:// form too.
         XCTAssertEqual(parseWebProxySettingsLink("tg://webproxy?host=tproxy.remindbot.ai&secret=\(secret)"), viaHost)
 
         // Emitted links still use `server`, never `host`.
-        XCTAssertEqual(webProxySettingsLink(viaHost), "https://t.me/webproxy?server=tproxy.remindbot.ai&secret=\(secret)")
+        XCTAssertEqual(webProxySettingsLink(viaHost), "https://darkmoon.cc/webproxy?server=tproxy.remindbot.ai&secret=\(secret)")
 
         // The alias must not loosen the one-address rule the other tests pin.
-        XCTAssertNil(parseWebProxySettingsLink("https://t.me/webproxy?host=a.example.com&server=b.example.com&secret=\(secret)"))
-        XCTAssertNil(parseWebProxySettingsLink("https://t.me/webproxy?host=a.example.com&host=b.example.com&secret=\(secret)"))
-        XCTAssertEqual(parseWebProxySettingsLink("https://t.me/webproxy?host=a.example.com&secret=\(secret)&extra=1")?.host, "a.example.com")
+        XCTAssertNil(parseWebProxySettingsLink("https://darkmoon.cc/webproxy?host=a.example.com&server=b.example.com&secret=\(secret)"))
+        XCTAssertNil(parseWebProxySettingsLink("https://darkmoon.cc/webproxy?host=a.example.com&host=b.example.com&secret=\(secret)"))
+        XCTAssertEqual(parseWebProxySettingsLink("https://darkmoon.cc/webproxy?host=a.example.com&secret=\(secret)&extra=1")?.host, "a.example.com")
     }
 
     func testWebProxyLinksCarryTheBasePath() throws {
@@ -143,7 +143,7 @@ final class ProxySettingsTests: XCTestCase {
         XCTAssertEqual(settings.connection, .web(secret: Data(0 ..< 16), path: "dobry-cola-super-app"))
         XCTAssertEqual(
             webProxySettingsLink(settings),
-            "https://t.me/webproxy?server=proxy.example.com%2Fdobry-cola-super-app&secret=\(marked)"
+            "https://darkmoon.cc/webproxy?server=proxy.example.com%2Fdobry-cola-super-app&secret=\(marked)"
         )
         XCTAssertEqual(parseWebProxySettingsLink(try XCTUnwrap(webProxySettingsLink(settings))), settings)
 
@@ -158,7 +158,7 @@ final class ProxySettingsTests: XCTestCase {
         // A root link keeps the plain secret, and still accepts the marked form.
         XCTAssertEqual(
             webProxySettingsLink(try XCTUnwrap(parseWebProxySettingsLink("tg://webproxy?server=proxy.example.com&secret=\(marked)"))),
-            "https://t.me/webproxy?server=proxy.example.com&secret=\(plain)"
+            "https://darkmoon.cc/webproxy?server=proxy.example.com&secret=\(plain)"
         )
     }
 

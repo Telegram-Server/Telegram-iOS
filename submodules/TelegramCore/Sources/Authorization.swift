@@ -13,6 +13,10 @@ public enum AuthorizationCodeRequestError {
     case phoneBanned
     case timeout
     case appOutdated
+    /// telesrv: `SIGN_UP_DISABLED`, the number has no account and sign-up is closed.
+    case signUpDisabled
+    /// telesrv: `CODE_LOGIN_DISABLED`, the server issues no login codes; sign in with the login password.
+    case codeLoginDisabled
 }
 
 func switchToAuthorizedAccount(transaction: AccountManagerModifier<TelegramAccountManagerTypes>, account: UnauthorizedAccount, isSupportUser: Bool) {
@@ -238,6 +242,10 @@ public func sendAuthorizationCode(accountManager: AccountManager<TelegramAccount
                 return .fail(.phoneBanned)
             } else if error.errorDescription == "UPDATE_APP_TO_LOGIN" {
                 return .fail(.appOutdated)
+            } else if error.errorDescription == "SIGN_UP_DISABLED" {
+                return .fail(.signUpDisabled)
+            } else if error.errorDescription == "CODE_LOGIN_DISABLED" {
+                return .fail(.codeLoginDisabled)
             } else if error.errorDescription == "SESSION_PASSWORD_NEEDED" {
                 return account.network.request(Api.functions.account.getPassword(), automaticFloodWait: false)
                 |> mapError { error -> AuthorizationCodeRequestError in
@@ -426,6 +434,10 @@ private func internalResendAuthorizationCode(accountManager: AccountManager<Tele
             return .phoneBanned
         } else if error.errorDescription == "UPDATE_APP_TO_LOGIN" {
             return .appOutdated
+        } else if error.errorDescription == "SIGN_UP_DISABLED" {
+            return .signUpDisabled
+        } else if error.errorDescription == "CODE_LOGIN_DISABLED" {
+            return .codeLoginDisabled
         } else {
             return .generic(info: (Int(error.errorCode), error.errorDescription))
         }
@@ -557,6 +569,10 @@ public func resendAuthorizationCode(accountManager: AccountManager<TelegramAccou
                                 return .phoneBanned
                             } else if error.errorDescription == "UPDATE_APP_TO_LOGIN" {
                                 return .appOutdated
+                            } else if error.errorDescription == "SIGN_UP_DISABLED" {
+                                return .signUpDisabled
+                            } else if error.errorDescription == "CODE_LOGIN_DISABLED" {
+                                return .codeLoginDisabled
                             } else {
                                 return .generic(info: (Int(error.errorCode), error.errorDescription))
                             }

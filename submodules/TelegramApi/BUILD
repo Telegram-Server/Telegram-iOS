@@ -15,14 +15,29 @@ GENERATED_TEST_SWIFT = [
     "Generated/Tests/SchemaAccessorProbes.swift",
 ]
 
+# telesrv.tl holds the self-hosted server's own RPCs (a byte-for-byte copy of _schema/telesrv.tl in
+# the td fork). It is kept apart from swift_scheme.tl, which every Layer update replaces, and joined
+# to its function section here. SwiftTL reads no comments and only one ---functions--- marker, so
+# both are dropped from telesrv.tl, which declares functions only. generate-swiftpm.sh joins the two
+# files the same way.
+genrule(
+    name = "TelegramApiScheme",
+    srcs = [
+        "swift_scheme.tl",
+        "telesrv.tl",
+    ],
+    outs = ["Generated/scheme.tl"],
+    cmd = "{ cat $(location swift_scheme.tl); echo; grep -v -e '^//' -e '^---' $(location telesrv.tl); } > $@",
+)
+
 genrule(
     name = "TelegramApiGenerated",
-    srcs = ["swift_scheme.tl"],
+    srcs = [":TelegramApiScheme"],
     outs = GENERATED_SWIFT + ["Generated/TLApiSchemaData.m"] + GENERATED_TEST_SWIFT,
     tools = ["//build-system/SwiftTL:SwiftTL"],
     cmd = " ".join([
         "$(execpath //build-system/SwiftTL:SwiftTL)",
-        "$(execpath swift_scheme.tl)",
+        "$(execpath :TelegramApiScheme)",
         "$(RULEDIR)/Generated",
         "--swift-file-count=%d" % SWIFT_FILE_COUNT,
         "--objc-output=$(RULEDIR)/Generated",

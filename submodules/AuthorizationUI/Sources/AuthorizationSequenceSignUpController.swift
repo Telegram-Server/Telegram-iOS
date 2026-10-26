@@ -32,6 +32,10 @@ final class AuthorizationSequenceSignUpController: ViewController {
     private var termsOfService: UnauthorizedAccountTermsOfService?
     
     var signUpWithName: ((String, String, Data?, Any?, TGVideoEditAdjustments?, Bool) -> Void)?
+    /// Sign-up with a telesrv login password: first and last name, password, avatar data, asset and adjustments.
+    var signUpWithLoginPassword: ((String, String, String, Data?, Any?, TGVideoEditAdjustments?) -> Void)?
+    /// The formatted number, when the page signs up with a telesrv login password.
+    let loginPasswordNumber: String?
     var openUrl: ((String) -> Void)?
     
     var avatarAsset: Any?
@@ -48,9 +52,10 @@ final class AuthorizationSequenceSignUpController: ViewController {
         }
     }
     
-    init(sharedContext: SharedAccountContext, presentationData: PresentationData, back: @escaping () -> Void, displayCancel: Bool) {
+    init(sharedContext: SharedAccountContext, presentationData: PresentationData, loginPasswordNumber: String? = nil, back: @escaping () -> Void, displayCancel: Bool) {
         self.sharedContext = sharedContext
         self.presentationData = presentationData
+        self.loginPasswordNumber = loginPasswordNumber
         self.back = back
         
         self.moreButtonNode = MoreButtonNode(theme: self.presentationData.theme, encircled: false, navigation: true)
@@ -81,8 +86,12 @@ final class AuthorizationSequenceSignUpController: ViewController {
             self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: presentationData.strings.Common_Cancel, style: .plain, target: self, action: #selector(self.cancelPressed))
         }
         
-        self.navigationItem.rightBarButtonItem = UIBarButtonItem(customDisplayNode: self.moreButtonNode)
-        
+        // telesrv.signUpWithPassword has no flag to keep contacts from being notified, so the menu that
+        // chooses it is not offered there.
+        if loginPasswordNumber == nil {
+            self.navigationItem.rightBarButtonItem = UIBarButtonItem(customDisplayNode: self.moreButtonNode)
+        }
+
         self.moreButtonNode.action = { [weak self] _, gesture in
             if let strongSelf = self {
                 strongSelf.morePressed(node: strongSelf.moreButtonNode.contextSourceNode, gesture: gesture)
@@ -158,7 +167,7 @@ final class AuthorizationSequenceSignUpController: ViewController {
         let currentAvatarMixin = Atomic<NSObject?>(value: nil)
         
         let theme = self.presentationData.theme
-        self.displayNode = AuthorizationSequenceSignUpControllerNode(theme: theme, strings: self.presentationData.strings, addPhoto: { [weak self] in
+        self.displayNode = AuthorizationSequenceSignUpControllerNode(theme: theme, strings: self.presentationData.strings, loginPasswordNumber: self.loginPasswordNumber, addPhoto: { [weak self] in
             presentLegacyAvatarPicker(holder: currentAvatarMixin, signup: true, theme: theme, present: { c, a in
                 self?.view.endEditing(true)
                 self?.present(c, in: .window(.root), with: a)
@@ -270,12 +279,31 @@ final class AuthorizationSequenceSignUpController: ViewController {
         }
         
         if let name = name {
-            self.signUpWithName?(name.0, name.1, self.controllerNode.currentPhoto.flatMap({ image in
+            if self.loginPasswordNumber != nil {
+                let (password, confirmation) = self.controllerNode.currentPassword
+                if password.isEmpty {
+                    self.hapticFeedback.error()
+                    self.controllerNode.animatePasswordError()
+                    return
+                }
+                if password != confirmation {
+                    self.hapticFeedback.error()
+                    self.controllerNode.animatePasswordError()
+                    self.present(textAlertController(sharedContext: self.sharedContext, title: nil, text: self.presentationData.strings.Telesrv_SignUp_PasswordMismatch, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                    return
+                }
+            }
+            let avatarData = self.controllerNode.currentPhoto.flatMap({ image in
                 let tempFile = EngineTempBox.shared.tempFile(fileName: "file")
                 let result = compressImageToJPEG(image, quality: 0.7, tempFilePath: tempFile.path)
                 EngineTempBox.shared.dispose(tempFile)
                 return result
-            }), self.avatarAsset, self.avatarAdjustments, self.announceSignUp)
+            })
+            if self.loginPasswordNumber != nil {
+                self.signUpWithLoginPassword?(name.0, name.1, self.controllerNode.currentPassword.0, avatarData, self.avatarAsset, self.avatarAdjustments)
+            } else {
+                self.signUpWithName?(name.0, name.1, avatarData, self.avatarAsset, self.avatarAdjustments, self.announceSignUp)
+            }
         }
     }
 }

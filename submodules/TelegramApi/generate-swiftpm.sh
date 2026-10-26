@@ -15,7 +15,11 @@ swift build -c release --package-path "$generator_package"
 generator="$(swift build -c release --package-path "$generator_package" --show-bin-path)/SwiftTL"
 
 rm -rf "$package/Sources/SwiftPMGenerated" "$package/ObjC/SwiftPMGenerated" "$package/Tests/SwiftPMGenerated"
+# telesrv.tl is joined to swift_scheme.tl's function section, as BUILD's TelegramApiScheme genrule does.
+scheme="$(mktemp)"
+trap 'rm -f "$scheme"' EXIT
+{ cat "$package/swift_scheme.tl"; echo; grep -v -e '^//' -e '^---' "$package/telesrv.tl"; } > "$scheme"
 # The default --swift-file-count is the one BUILD passes, so both copies split the same way.
-"$generator" "$package/swift_scheme.tl" "$package/Sources/SwiftPMGenerated" \
+"$generator" "$scheme" "$package/Sources/SwiftPMGenerated" \
     --objc-output="$package/ObjC/SwiftPMGenerated" \
     --fixtures-output="$package/Tests/SwiftPMGenerated/SchemaFixtures.swift"

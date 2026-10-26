@@ -7,6 +7,14 @@ import PresentationDataUtils
 import ProgressNavigationButtonNode
 import AccountContext
 
+/// What the password page asks for.
+enum AuthorizationSequencePasswordEntryMode: Equatable {
+    /// The 2FA cloud password (`auth.checkPassword`).
+    case cloudPassword
+    /// A telesrv login password for the formatted phone number (`telesrv.signInWithPassword`).
+    case loginPassword(number: String)
+}
+
 final class AuthorizationSequencePasswordEntryController: ViewController {
     private var controllerNode: AuthorizationSequencePasswordEntryControllerNode {
         return self.displayNode as! AuthorizationSequencePasswordEntryControllerNode
@@ -16,6 +24,7 @@ final class AuthorizationSequencePasswordEntryController: ViewController {
     
     private let sharedContext: SharedAccountContext
     private let presentationData: PresentationData
+    let mode: AuthorizationSequencePasswordEntryMode
     
     var loginWithPassword: ((String) -> Void)?
     var forgot: (() -> Void)?
@@ -43,9 +52,10 @@ final class AuthorizationSequencePasswordEntryController: ViewController {
         }
     }
     
-    init(sharedContext: SharedAccountContext, presentationData: PresentationData, back: @escaping () -> Void) {
+    init(sharedContext: SharedAccountContext, presentationData: PresentationData, mode: AuthorizationSequencePasswordEntryMode = .cloudPassword, back: @escaping () -> Void) {
         self.sharedContext = sharedContext
         self.presentationData = presentationData
+        self.mode = mode
         
         super.init(navigationBarPresentationData: NavigationBarPresentationData(theme: AuthorizationSequenceController.navigationBarTheme(presentationData.theme), strings: NavigationBarStrings(presentationStrings: presentationData.strings)))
         
@@ -68,7 +78,7 @@ final class AuthorizationSequencePasswordEntryController: ViewController {
     }
     
     override public func loadDisplayNode() {
-        self.displayNode = AuthorizationSequencePasswordEntryControllerNode(strings: self.presentationData.strings, theme: self.presentationData.theme)
+        self.displayNode = AuthorizationSequencePasswordEntryControllerNode(strings: self.presentationData.strings, theme: self.presentationData.theme, mode: self.mode)
         self.displayNodeDidLoad()
         
         self.controllerNode.view.disableAutomaticKeyboardHandling = [.forward, .backward]

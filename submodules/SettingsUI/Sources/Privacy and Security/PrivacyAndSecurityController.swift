@@ -47,7 +47,9 @@ private final class PrivacyAndSecurityControllerArguments {
     let openEmailSettings: (String?) -> Void
     let openMessagePrivacy: () -> Void
     let openGiftsPrivacy: () -> Void
-    
+    /// telesrv: the login password screen. Set after creation, so the long initializer is unchanged.
+    var openTelesrvLoginPassword: () -> Void = {}
+
     init(account: Account, openBlockedUsers: @escaping () -> Void, openLastSeenPrivacy: @escaping () -> Void, openGroupsPrivacy: @escaping () -> Void, openVoiceCallPrivacy: @escaping () -> Void, openProfilePhotoPrivacy: @escaping () -> Void, openForwardPrivacy: @escaping () -> Void, openPhoneNumberPrivacy: @escaping () -> Void, openVoiceMessagePrivacy: @escaping () -> Void, openBioPrivacy: @escaping () -> Void, openBirthdayPrivacy: @escaping () -> Void, openSavedMusicPrivacy: @escaping () -> Void, openPasscode: @escaping () -> Void, openTwoStepVerification: @escaping (TwoStepVerificationAccessConfiguration?) -> Void, openPasskeys: @escaping () -> Void, openActiveSessions: @escaping () -> Void, toggleArchiveAndMuteNonContacts: @escaping (Bool) -> Void, setupAccountAutoremove: @escaping () -> Void, setupMessageAutoremove: @escaping () -> Void, openDataSettings: @escaping () -> Void, openBrowserSelection: @escaping () -> Void, openEmailSettings: @escaping (String?) -> Void, openMessagePrivacy: @escaping () -> Void, openGiftsPrivacy: @escaping () -> Void) {
         self.account = account
         self.openBlockedUsers = openBlockedUsers
@@ -121,6 +123,7 @@ private enum PrivacyAndSecurityEntry: ItemListNodeEntry {
     case passcode(PresentationTheme, String, Bool, String)
     case twoStepVerification(PresentationTheme, String, String, TwoStepVerificationAccessConfiguration?)
     case passkeys(PresentationTheme, String, String)
+    case telesrvLoginPassword(PresentationTheme, String, String)
     case loginEmail(PresentationTheme, String, String?)
     case loginEmailInfo(PresentationTheme, String)
     case activeSessions(PresentationTheme, String, String)
@@ -138,7 +141,7 @@ private enum PrivacyAndSecurityEntry: ItemListNodeEntry {
     
     var section: ItemListSectionId {
         switch self {
-        case .blockedPeers, .activeSessions, .passcode, .twoStepVerification, .passkeys, .messageAutoremoveTimeout, .messageAutoremoveInfo:
+        case .blockedPeers, .activeSessions, .passcode, .twoStepVerification, .passkeys, .telesrvLoginPassword, .messageAutoremoveTimeout, .messageAutoremoveInfo:
             return PrivacyAndSecuritySection.general.rawValue
         case .loginEmail, .loginEmailInfo:
             return PrivacyAndSecuritySection.loginEmail.rawValue
@@ -167,62 +170,64 @@ private enum PrivacyAndSecurityEntry: ItemListNodeEntry {
                 return 4
             case .passkeys:
                 return 5
-            case .messageAutoremoveTimeout:
+            case .telesrvLoginPassword:
                 return 6
-            case .messageAutoremoveInfo:
+            case .messageAutoremoveTimeout:
                 return 7
-            case .loginEmail:
+            case .messageAutoremoveInfo:
                 return 8
-            case .loginEmailInfo:
+            case .loginEmail:
                 return 9
-            case .privacyHeader:
+            case .loginEmailInfo:
                 return 10
-            case .phoneNumberPrivacy:
+            case .privacyHeader:
                 return 11
-            case .lastSeenPrivacy:
+            case .phoneNumberPrivacy:
                 return 12
-            case .profilePhotoPrivacy:
+            case .lastSeenPrivacy:
                 return 13
-            case .bioPrivacy:
+            case .profilePhotoPrivacy:
                 return 14
-            case .giftsAutoSavePrivacy:
+            case .bioPrivacy:
                 return 15
-            case .birthdayPrivacy:
+            case .giftsAutoSavePrivacy:
                 return 16
-            case .savedMusicPrivacy:
+            case .birthdayPrivacy:
                 return 17
-            case .forwardPrivacy:
+            case .savedMusicPrivacy:
                 return 18
-            case .voiceCallPrivacy:
+            case .forwardPrivacy:
                 return 19
-            case .voiceMessagePrivacy:
+            case .voiceCallPrivacy:
                 return 20
-            case .messagePrivacy:
+            case .voiceMessagePrivacy:
                 return 21
-            case .groupPrivacy:
+            case .messagePrivacy:
                 return 22
-            case .groupPrivacyFooter:
+            case .groupPrivacy:
                 return 23
-            case .selectivePrivacyInfo:
+            case .groupPrivacyFooter:
                 return 24
-            case .autoArchiveHeader:
+            case .selectivePrivacyInfo:
                 return 25
-            case .autoArchive:
+            case .autoArchiveHeader:
                 return 26
-            case .autoArchiveInfo:
+            case .autoArchive:
                 return 27
-            case .accountHeader:
+            case .autoArchiveInfo:
                 return 28
-            case .accountTimeout:
+            case .accountHeader:
                 return 29
-            case .accountInfo:
+            case .accountTimeout:
                 return 30
-            case .dataSettings:
+            case .accountInfo:
                 return 31
-            case .dataSettingsInfo:
+            case .dataSettings:
                 return 32
-            case .openLinksIn:
+            case .dataSettingsInfo:
                 return 33
+            case .openLinksIn:
+                return 34
         }
     }
     
@@ -338,6 +343,12 @@ private enum PrivacyAndSecurityEntry: ItemListNodeEntry {
                 }
             case let .passkeys(lhsTheme, lhsText, lhsValue):
                 if case let .passkeys(rhsTheme, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsText == rhsText, lhsValue == rhsValue {
+                    return true
+                } else {
+                    return false
+                }
+            case let .telesrvLoginPassword(lhsTheme, lhsText, lhsValue):
+                if case let .telesrvLoginPassword(rhsTheme, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsText == rhsText, lhsValue == rhsValue {
                     return true
                 } else {
                     return false
@@ -507,6 +518,10 @@ private enum PrivacyAndSecurityEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: PresentationResourcesSettings.passkeys, title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.openPasskeys()
                 })
+            case let .telesrvLoginPassword(_, text, value):
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: PresentationResourcesSettings.lockOrange, title: text, label: value, sectionId: self.section, style: .blocks, action: {
+                    arguments.openTelesrvLoginPassword()
+                })
             case let .messageAutoremoveTimeout(_, text, value):
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: PresentationResourcesSettings.timer, title: text, label: value, sectionId: self.section, style: .blocks, action: {
                     arguments.setupMessageAutoremove()
@@ -654,6 +669,8 @@ private func privacyAndSecurityControllerEntries(
     twoStepAuthData: TwoStepVerificationAccessConfiguration?,
     hasPasskeys: Bool?,
     displayPasskeys: Bool,
+    displayTelesrvLoginPassword: Bool,
+    hasTelesrvLoginPassword: Bool?,
     canAutoarchive: Bool,
     isPremiumDisabled: Bool,
     isPremium: Bool,
@@ -699,6 +716,14 @@ private func privacyAndSecurityControllerEntries(
             passkeysString = hasPasskeys ? presentationData.strings.PrivacySettings_PasscodeOn : presentationData.strings.PrivacySettings_PasscodeOff
         }
         entries.append(.passkeys(presentationData.theme, presentationData.strings.PrivacySettings_Passkey, passkeysString))
+    }
+
+    if displayTelesrvLoginPassword {
+        var loginPasswordString = ""
+        if let hasTelesrvLoginPassword {
+            loginPasswordString = hasTelesrvLoginPassword ? presentationData.strings.PrivacySettings_PasscodeOn : presentationData.strings.PrivacySettings_PasscodeOff
+        }
+        entries.append(.telesrvLoginPassword(presentationData.theme, presentationData.strings.Telesrv_LoginPasswordSettings_Title, loginPasswordString))
     }
     
     if let privacySettings = privacySettings {
@@ -1580,6 +1605,31 @@ public func privacyAndSecurityController(
         }
     }
     
+    // telesrv: the login password row, while the server offers password login.
+    let displayTelesrvLoginPassword = TelesrvLoginConfiguration.with(appConfiguration: context.currentAppConfiguration.with({ $0 })).passwordLogin
+    let telesrvLoginPasswordValue = Promise<Bool?>(nil)
+    if displayTelesrvLoginPassword {
+        telesrvLoginPasswordValue.set(context.engine.auth.telesrvLoginPasswordState()
+        |> map { state -> Bool? in
+            return state.hasPassword
+        }
+        |> `catch` { _ -> Signal<Bool?, NoError> in
+            return .single(nil)
+        })
+    }
+    arguments.openTelesrvLoginPassword = {
+        let _ = (telesrvLoginPasswordValue.get()
+        |> take(1)
+        |> deliverOnMainQueue).startStandalone(next: { hasPassword in
+            guard let hasPassword else {
+                return
+            }
+            pushControllerImpl?(telesrvLoginPasswordController(context: context, hasPassword: hasPassword, updatedHasPassword: { value in
+                telesrvLoginPasswordValue.set(.single(value))
+            }), true)
+        })
+    }
+
     let webBrowserData = combineLatest(
         context.sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.contactSynchronizationSettings, ApplicationSpecificSharedDataKeys.webBrowserSettings]),
         context.engine.data.subscribe(TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: PreferencesKeys.webBrowserSettings))
@@ -1597,7 +1647,7 @@ public func privacyAndSecurityController(
         webSessionsContext.state,
         context.sharedContext.accountManager.accessChallengeData(),
         combineLatest(twoStepAuth.get(), twoStepAuthDataValue.get()),
-        combineLatest(passkeys.get(), passkeysDataValue.get()),
+        combineLatest(passkeys.get(), passkeysDataValue.get(), telesrvLoginPasswordValue.get()),
         context.engine.data.subscribe(TelegramEngine.EngineData.Item.Configuration.App()),
         context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId)),
         loginEmail
@@ -1636,7 +1686,7 @@ public func privacyAndSecurityController(
             defaultWebBrowser = presentationData.strings.WebBrowser_Telegram
         }
         
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: privacyAndSecurityControllerEntries(presentationData: presentationData, state: state, privacySettings: privacySettings, accessChallengeData: accessChallengeData.data, blockedPeerCount: blockedPeersState.totalCount, activeWebsitesCount: activeWebsitesState.sessions.count, hasTwoStepAuth: twoStepAuth.0, twoStepAuthData: twoStepAuth.1, hasPasskeys: passkeys.0, displayPasskeys: displayPasskeys, canAutoarchive: canAutoarchive, isPremiumDisabled: isPremiumDisabled, isPremium: isPremium, loginEmail: loginEmail, accountPeer: accountPeer, defaultWebBrowser: defaultWebBrowser, appConfiguration: appConfiguration), style: .blocks, ensureVisibleItemTag: focusOnItemTag, animateChanges: false)
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: privacyAndSecurityControllerEntries(presentationData: presentationData, state: state, privacySettings: privacySettings, accessChallengeData: accessChallengeData.data, blockedPeerCount: blockedPeersState.totalCount, activeWebsitesCount: activeWebsitesState.sessions.count, hasTwoStepAuth: twoStepAuth.0, twoStepAuthData: twoStepAuth.1, hasPasskeys: passkeys.0, displayPasskeys: displayPasskeys, displayTelesrvLoginPassword: displayTelesrvLoginPassword, hasTelesrvLoginPassword: passkeys.2, canAutoarchive: canAutoarchive, isPremiumDisabled: isPremiumDisabled, isPremium: isPremium, loginEmail: loginEmail, accountPeer: accountPeer, defaultWebBrowser: defaultWebBrowser, appConfiguration: appConfiguration), style: .blocks, ensureVisibleItemTag: focusOnItemTag, animateChanges: false)
         
         return (controllerState, (listState, arguments))
     }

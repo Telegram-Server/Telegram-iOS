@@ -403,7 +403,7 @@ public enum TwoStepPasswordDerivation {
     case unknown
     case sha256_sha256_PBKDF2_HMAC_sha512_sha256_srp(salt1: Data, salt2: Data, iterations: Int32, g: Int32, p: Data)
     
-    fileprivate init(_ apiAlgo: Api.PasswordKdfAlgo) {
+    init(_ apiAlgo: Api.PasswordKdfAlgo) {
         switch apiAlgo {
             case .passwordKdfAlgoUnknown:
                 self = .unknown

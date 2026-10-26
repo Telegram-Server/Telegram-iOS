@@ -62,6 +62,12 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
     }
     
     private var inAppPurchaseManager: InAppPurchaseManager!
+
+    /// The server's login switches (telesrv), fetched before login. `nil` while unknown, and when the
+    /// server published none: then the stock code login applies.
+    fileprivate var telesrvLoginConfiguration: TelesrvLoginConfiguration?
+    fileprivate let telesrvLoginConfigurationPromise = Promise<TelesrvLoginConfiguration?>()
+    fileprivate let telesrvLoginConfigurationDisposable = MetaDisposable()
     
     public init(sharedContext: SharedAccountContext, account: UnauthorizedAccount, otherAccountPhoneNumbers: ((String, AccountRecordId, Bool)?, [(String, AccountRecordId, Bool)]), presentationData: PresentationData, openUrl: @escaping (String) -> Void, apiId: Int32, apiHash: String, authorizationCompleted: @escaping () -> Void) {
         self.sharedContext = sharedContext
@@ -111,6 +117,8 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                 }
             }
         })
+
+        self.telesrvRefreshLoginConfiguration()
     }
     
     required public init(coder aDecoder: NSCoder) {
@@ -121,6 +129,7 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
         self.stateDisposable?.dispose()
         self.actionDisposable.dispose()
         self.applicationStateDisposable?.dispose()
+        self.telesrvLoginConfigurationDisposable.dispose()
     }
     
     override public func loadView() {
@@ -193,127 +202,14 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                 }
                 strongSelf.account = updatedAccount
                 strongSelf.inAppPurchaseManager = InAppPurchaseManager(engine: .unauthorized(strongSelf.engine))
+                strongSelf.telesrvRefreshLoginConfiguration()
             }
             controller.loginWithNumber = { [weak self, weak controller] number, syncContacts in
                 guard let self else {
                     return
                 }
                 controller?.inProgress = true
-                
-                let disableAuthTokens = self.sharedContext.immediateExperimentalUISettings.disableReloginTokens
-                let authorizationPushConfiguration = self.sharedContext.authorizationPushConfiguration
-                |> take(1)
-                |> timeout(2.0, queue: .mainQueue(), alternate: .single(nil))
-                let _ = (authorizationPushConfiguration
-                |> deliverOnMainQueue).startStandalone(next: { [weak self] authorizationPushConfiguration in
-                    if let strongSelf = self {
-                        strongSelf.actionDisposable.set((sendAuthorizationCode(accountManager: strongSelf.sharedContext.accountManager, account: strongSelf.account, phoneNumber: number, apiId: strongSelf.apiId, apiHash: strongSelf.apiHash, pushNotificationConfiguration: authorizationPushConfiguration, firebaseSecretStream: strongSelf.sharedContext.firebaseSecretStream, syncContacts: syncContacts, disableAuthTokens: disableAuthTokens, forcedPasswordSetupNotice: { value in
-                            guard let entry = EngineCodableEntry(ApplicationSpecificCounterNotice(value: value)) else {
-                                return nil
-                            }
-                            return (ApplicationSpecificNotice.forcedPasswordSetupKey(), entry)
-                        }) |> deliverOnMainQueue).startStrict(next: { [weak self] result in
-                            if let strongSelf = self {
-                                switch result {
-                                case let .sentCode(account):
-                                    controller?.inProgress = false
-                                    strongSelf.account = account
-                                    strongSelf.inAppPurchaseManager = InAppPurchaseManager(engine: .unauthorized(strongSelf.engine))
-                                case .loggedIn:
-                                    break
-                                }
-                            }
-                        }, error: { error in
-                            if let strongSelf = self, let controller = controller {
-                                controller.inProgress = false
-                                
-                                let text: String
-                                var actions: [TextAlertAction] = []
-                                switch error {
-                                    case .limitExceeded:
-                                        text = strongSelf.presentationData.strings.Login_CodeFloodError
-                                        actions.append(TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {}))
-                                    case .invalidPhoneNumber:
-                                        text = strongSelf.presentationData.strings.Login_InvalidPhoneError
-                                        actions.append(TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_OK, action: {}))
-                                        actions.append(TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Login_PhoneNumberHelp, action: { [weak controller] in
-                                            guard let strongSelf = self, let controller = controller else {
-                                                return
-                                            }
-                                            let formattedNumber = formatPhoneNumber(number)
-                                            let appVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown"
-                                            let systemVersion = UIDevice.current.systemVersion
-                                            let locale = Locale.current.identifier
-                                            let carrier = CTCarrier()
-                                            let mnc = carrier.mobileNetworkCode ?? "none"
-                                            
-                                            AuthorizationSequenceController.presentEmailComposeController(sharedContext: strongSelf.sharedContext, address: "recover@telegram.org", subject: strongSelf.presentationData.strings.Login_InvalidPhoneEmailSubject(formattedNumber).string, body: strongSelf.presentationData.strings.Login_InvalidPhoneEmailBody(formattedNumber, appVersion, systemVersion, locale, mnc).string, from: controller, presentationData: strongSelf.presentationData)
-                                        }))
-                                    case .phoneLimitExceeded:
-                                        text = strongSelf.presentationData.strings.Login_PhoneFloodError
-                                        actions.append(TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {}))
-                                    case .appOutdated:
-                                        text = strongSelf.presentationData.strings.Login_ErrorAppOutdated
-                                        let updateUrl = strongSelf.presentationData.strings.InviteText_URL
-                                        let sharedContext = strongSelf.sharedContext
-                                        actions.append(TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {
-                                            sharedContext.applicationBindings.openUrl(updateUrl)
-                                        }))
-                                    case .phoneBanned:
-                                        text = strongSelf.presentationData.strings.Login_PhoneBannedError
-                                        actions.append(TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_OK, action: {}))
-                                        actions.append(TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Login_PhoneNumberHelp, action: { [weak controller] in
-                                            guard let strongSelf = self, let controller = controller else {
-                                                return
-                                            }
-                                            let formattedNumber = formatPhoneNumber(number)
-                                            let appVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown"
-                                            let systemVersion = UIDevice.current.systemVersion
-                                            let locale = Locale.current.identifier
-                                            let carrier = CTCarrier()
-                                            let mnc = carrier.mobileNetworkCode ?? "none"
-                                            
-                                            AuthorizationSequenceController.presentEmailComposeController(sharedContext: strongSelf.sharedContext, address: "recover@telegram.org", subject: strongSelf.presentationData.strings.Login_PhoneBannedEmailSubject(formattedNumber).string, body: strongSelf.presentationData.strings.Login_PhoneBannedEmailBody(formattedNumber, appVersion, systemVersion, locale, mnc).string, from: controller, presentationData: strongSelf.presentationData)
-                                        }))
-                                    case let .generic(info):
-                                        text = strongSelf.presentationData.strings.Login_UnknownError
-                                        actions.append(TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_OK, action: {}))
-                                        actions.append(TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Login_PhoneNumberHelp, action: { [weak controller] in
-                                            guard let strongSelf = self, let controller = controller else {
-                                                return
-                                            }
-                                            let formattedNumber = formatPhoneNumber(number)
-                                            let appVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown"
-                                            let systemVersion = UIDevice.current.systemVersion
-                                            let locale = Locale.current.identifier
-                                            let carrier = CTCarrier()
-                                            let mnc = carrier.mobileNetworkCode ?? "none"
-                                            let errorString: String
-                                            if let (code, description) = info {
-                                                errorString = "\(code): \(description)"
-                                            } else {
-                                                errorString = "unknown"
-                                            }
-                                            
-                                            AuthorizationSequenceController.presentEmailComposeController(sharedContext: strongSelf.sharedContext, address: "recover@telegram.org", subject: strongSelf.presentationData.strings.Login_PhoneGenericEmailSubject(formattedNumber).string, body: strongSelf.presentationData.strings.Login_PhoneGenericEmailBody(formattedNumber, errorString, appVersion, systemVersion, locale, mnc).string, from: controller, presentationData: strongSelf.presentationData)
-                                        }))
-                                    case .timeout:
-                                        text = strongSelf.presentationData.strings.Login_NetworkError
-                                        actions.append(TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {}))
-                                        actions.append(TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.ChatSettings_ConnectionType_UseProxy, action: { [weak controller] in
-                                            guard let strongSelf = self, let controller = controller else {
-                                                return
-                                            }
-                                            controller.present(strongSelf.sharedContext.makeProxySettingsController(sharedContext: strongSelf.sharedContext, account: strongSelf.account), in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
-                                        }))
-                                }
-                                (controller.navigationController as? NavigationController)?.presentOverlay(controller: textAlertController(sharedContext: strongSelf.sharedContext, title: nil, text: text, actions: actions), inGlobal: true, blockInteraction: true)
-                                
-                                controller.dismissConfirmation()
-                            }
-                        }))
-                    }
-                })
+                self.telesrvRouteLogin(number: number, syncContacts: syncContacts, phoneController: controller)
             }
             controller.loginWithPasskey = { [weak self, weak controller] passkey, syncContacts in
                 guard let self else {
@@ -677,6 +573,10 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                                     text = strongSelf.presentationData.strings.Login_PhoneBannedError
                                 case .generic:
                                     text = strongSelf.presentationData.strings.Login_UnknownError
+                                case .signUpDisabled:
+                                    text = strongSelf.presentationData.strings.Telesrv_SignUpDisabled
+                                case .codeLoginDisabled:
+                                    text = strongSelf.presentationData.strings.Telesrv_CodeLoginDisabled
                                 case .timeout:
                                     text = strongSelf.presentationData.strings.Login_NetworkError
                             }
@@ -918,7 +818,7 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
     private func passwordEntryController(hint: String, suggestReset: Bool, syncContacts: Bool) -> AuthorizationSequencePasswordEntryController {
         var currentController: AuthorizationSequencePasswordEntryController?
         for c in self.viewControllers {
-            if let c = c as? AuthorizationSequencePasswordEntryController {
+            if let c = c as? AuthorizationSequencePasswordEntryController, c.mode == .cloudPassword {
                 currentController = c
                 break
             }
@@ -1123,7 +1023,7 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
     private func signUpController(firstName: String, lastName: String, termsOfService: UnauthorizedAccountTermsOfService?, displayCancel: Bool) -> AuthorizationSequenceSignUpController {
         var currentController: AuthorizationSequenceSignUpController?
         for c in self.viewControllers {
-            if let c = c as? AuthorizationSequenceSignUpController {
+            if let c = c as? AuthorizationSequenceSignUpController, c.loginPasswordNumber == nil {
                 currentController = c
                 break
             }
@@ -1150,61 +1050,7 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                 if let strongSelf = self {
                     controller?.inProgress = true
                     
-                    var videoStartTimestamp: Double? = nil
-                    if let adjustments = avatarAdjustments, adjustments.videoStartValue > 0.0 {
-                        videoStartTimestamp = adjustments.videoStartValue - adjustments.trimStartValue
-                    }
-                    
-                    let avatarVideo: Signal<UploadedPeerPhotoData?, NoError>?
-                    if let avatarAsset = avatarAsset as? AVAsset {
-                        let engine = strongSelf.engine
-                        avatarVideo = Signal<EngineMediaResource?, NoError> { subscriber in
-                            let entityRenderer: LegacyPaintEntityRenderer? = avatarAdjustments.flatMap { adjustments in
-                                if let paintingData = adjustments.paintingData, paintingData.hasAnimation {
-                                    return LegacyPaintEntityRenderer(postbox: nil, adjustments: adjustments)
-                                } else {
-                                    return nil
-                                }
-                            }
-                            
-                            let tempFile = EngineTempBox.shared.tempFile(fileName: "video.mp4")
-                            let signal = TGMediaVideoConverter.convert(avatarAsset, adjustments: avatarAdjustments, path: tempFile.path, watcher: nil, entityRenderer: entityRenderer)!
-                            
-                            let signalDisposable = signal.start(next: { next in
-                                if let result = next as? TGMediaVideoConversionResult {
-                                    var value = stat()
-                                    if stat(result.fileURL.path, &value) == 0 {
-                                        if let data = try? Data(contentsOf: result.fileURL) {
-                                            let resource = LocalFileMediaResource(fileId: Int64.random(in: Int64.min ... Int64.max))
-                                            engine.resources.storeResourceData(id: EngineMediaResource.Id(resource.id), data: data, synchronous: true)
-                                            subscriber.putNext(EngineMediaResource(resource))
-                                            
-                                            EngineTempBox.shared.dispose(tempFile)
-                                        }
-                                    }
-                                    subscriber.putCompletion()
-                                }
-                            }, error: { _ in
-                            }, completed: nil)
-                            
-                            let disposable = ActionDisposable {
-                                signalDisposable?.dispose()
-                            }
-                            
-                            return ActionDisposable {
-                                disposable.dispose()
-                            }
-                        }
-                        |> mapToSignal { resource -> Signal<UploadedPeerPhotoData?, NoError> in
-                            if let resource = resource {
-                                return engine.auth.uploadedPeerVideo(resource: resource) |> map(Optional.init)
-                            } else {
-                                return .single(nil)
-                            }
-                        }
-                    } else {
-                        avatarVideo = nil
-                    }
+                    let (avatarVideo, videoStartTimestamp) = strongSelf.signUpAvatarVideo(avatarAsset: avatarAsset, avatarAdjustments: avatarAdjustments)
                     
                     strongSelf.actionDisposable.set((signUpWithName(accountManager: strongSelf.sharedContext.accountManager, account: strongSelf.account, firstName: firstName, lastName: lastName, avatarData: avatarData, avatarVideo: avatarVideo, videoStartTimestamp: videoStartTimestamp, disableJoinNotifications: !announceSignUp, forcedPasswordSetupNotice: { value in
                         guard let entry = EngineCodableEntry(ApplicationSpecificCounterNotice(value: value)) else {
@@ -1242,6 +1088,195 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
         return controller
     }
     
+    /// The stock login: `auth.sendCode` for the number.
+    fileprivate func telesrvSendCode(number: String, syncContacts: Bool, controller phoneController: AuthorizationSequencePhoneEntryController?) {
+        weak var controller = phoneController
+        controller?.inProgress = true
+
+        let disableAuthTokens = self.sharedContext.immediateExperimentalUISettings.disableReloginTokens
+        let authorizationPushConfiguration = self.sharedContext.authorizationPushConfiguration
+        |> take(1)
+        |> timeout(2.0, queue: .mainQueue(), alternate: .single(nil))
+        let _ = (authorizationPushConfiguration
+        |> deliverOnMainQueue).startStandalone(next: { [weak self] authorizationPushConfiguration in
+            if let strongSelf = self {
+                strongSelf.actionDisposable.set((sendAuthorizationCode(accountManager: strongSelf.sharedContext.accountManager, account: strongSelf.account, phoneNumber: number, apiId: strongSelf.apiId, apiHash: strongSelf.apiHash, pushNotificationConfiguration: authorizationPushConfiguration, firebaseSecretStream: strongSelf.sharedContext.firebaseSecretStream, syncContacts: syncContacts, disableAuthTokens: disableAuthTokens, forcedPasswordSetupNotice: { value in
+                    guard let entry = EngineCodableEntry(ApplicationSpecificCounterNotice(value: value)) else {
+                        return nil
+                    }
+                    return (ApplicationSpecificNotice.forcedPasswordSetupKey(), entry)
+                }) |> deliverOnMainQueue).startStrict(next: { [weak self] result in
+                    if let strongSelf = self {
+                        switch result {
+                        case let .sentCode(account):
+                            controller?.inProgress = false
+                            strongSelf.account = account
+                            strongSelf.inAppPurchaseManager = InAppPurchaseManager(engine: .unauthorized(strongSelf.engine))
+                        case .loggedIn:
+                            break
+                        }
+                    }
+                }, error: { error in
+                    if let strongSelf = self, let controller = controller {
+                        controller.inProgress = false
+                        
+                        let text: String
+                        var actions: [TextAlertAction] = []
+                        switch error {
+                            case .limitExceeded:
+                                text = strongSelf.presentationData.strings.Login_CodeFloodError
+                                actions.append(TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {}))
+                            case .invalidPhoneNumber:
+                                text = strongSelf.presentationData.strings.Login_InvalidPhoneError
+                                actions.append(TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_OK, action: {}))
+                                actions.append(TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Login_PhoneNumberHelp, action: { [weak controller] in
+                                    guard let strongSelf = self, let controller = controller else {
+                                        return
+                                    }
+                                    let formattedNumber = formatPhoneNumber(number)
+                                    let appVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown"
+                                    let systemVersion = UIDevice.current.systemVersion
+                                    let locale = Locale.current.identifier
+                                    let carrier = CTCarrier()
+                                    let mnc = carrier.mobileNetworkCode ?? "none"
+                                    
+                                    AuthorizationSequenceController.presentEmailComposeController(sharedContext: strongSelf.sharedContext, address: "recover@telegram.org", subject: strongSelf.presentationData.strings.Login_InvalidPhoneEmailSubject(formattedNumber).string, body: strongSelf.presentationData.strings.Login_InvalidPhoneEmailBody(formattedNumber, appVersion, systemVersion, locale, mnc).string, from: controller, presentationData: strongSelf.presentationData)
+                                }))
+                            case .phoneLimitExceeded:
+                                text = strongSelf.presentationData.strings.Login_PhoneFloodError
+                                actions.append(TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {}))
+                            case .appOutdated:
+                                text = strongSelf.presentationData.strings.Login_ErrorAppOutdated
+                                let updateUrl = strongSelf.presentationData.strings.InviteText_URL
+                                let sharedContext = strongSelf.sharedContext
+                                actions.append(TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {
+                                    sharedContext.applicationBindings.openUrl(updateUrl)
+                                }))
+                            case .phoneBanned:
+                                text = strongSelf.presentationData.strings.Login_PhoneBannedError
+                                actions.append(TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_OK, action: {}))
+                                actions.append(TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Login_PhoneNumberHelp, action: { [weak controller] in
+                                    guard let strongSelf = self, let controller = controller else {
+                                        return
+                                    }
+                                    let formattedNumber = formatPhoneNumber(number)
+                                    let appVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown"
+                                    let systemVersion = UIDevice.current.systemVersion
+                                    let locale = Locale.current.identifier
+                                    let carrier = CTCarrier()
+                                    let mnc = carrier.mobileNetworkCode ?? "none"
+                                    
+                                    AuthorizationSequenceController.presentEmailComposeController(sharedContext: strongSelf.sharedContext, address: "recover@telegram.org", subject: strongSelf.presentationData.strings.Login_PhoneBannedEmailSubject(formattedNumber).string, body: strongSelf.presentationData.strings.Login_PhoneBannedEmailBody(formattedNumber, appVersion, systemVersion, locale, mnc).string, from: controller, presentationData: strongSelf.presentationData)
+                                }))
+                            case let .generic(info):
+                                text = strongSelf.presentationData.strings.Login_UnknownError
+                                actions.append(TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_OK, action: {}))
+                                actions.append(TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Login_PhoneNumberHelp, action: { [weak controller] in
+                                    guard let strongSelf = self, let controller = controller else {
+                                        return
+                                    }
+                                    let formattedNumber = formatPhoneNumber(number)
+                                    let appVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown"
+                                    let systemVersion = UIDevice.current.systemVersion
+                                    let locale = Locale.current.identifier
+                                    let carrier = CTCarrier()
+                                    let mnc = carrier.mobileNetworkCode ?? "none"
+                                    let errorString: String
+                                    if let (code, description) = info {
+                                        errorString = "\(code): \(description)"
+                                    } else {
+                                        errorString = "unknown"
+                                    }
+                                    
+                                    AuthorizationSequenceController.presentEmailComposeController(sharedContext: strongSelf.sharedContext, address: "recover@telegram.org", subject: strongSelf.presentationData.strings.Login_PhoneGenericEmailSubject(formattedNumber).string, body: strongSelf.presentationData.strings.Login_PhoneGenericEmailBody(formattedNumber, errorString, appVersion, systemVersion, locale, mnc).string, from: controller, presentationData: strongSelf.presentationData)
+                                }))
+                            case .signUpDisabled:
+                                text = strongSelf.presentationData.strings.Telesrv_SignUpDisabled
+                                actions.append(TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {}))
+                            case .codeLoginDisabled:
+                                text = strongSelf.presentationData.strings.Telesrv_CodeLoginDisabled
+                                actions.append(TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {
+                                    self?.telesrvCodeLoginWasRefused(number: number, syncContacts: syncContacts, phoneController: controller)
+                                }))
+                            case .timeout:
+                                text = strongSelf.presentationData.strings.Login_NetworkError
+                                actions.append(TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {}))
+                                actions.append(TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.ChatSettings_ConnectionType_UseProxy, action: { [weak controller] in
+                                    guard let strongSelf = self, let controller = controller else {
+                                        return
+                                    }
+                                    controller.present(strongSelf.sharedContext.makeProxySettingsController(sharedContext: strongSelf.sharedContext, account: strongSelf.account), in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+                                }))
+                        }
+                        (controller.navigationController as? NavigationController)?.presentOverlay(controller: textAlertController(sharedContext: strongSelf.sharedContext, title: nil, text: text, actions: actions), inGlobal: true, blockInteraction: true)
+                        
+                        controller.dismissConfirmation()
+                    }
+                }))
+            }
+        })
+    }
+
+    /// The video of a sign-up avatar, converted and uploaded, with where it starts.
+    fileprivate func signUpAvatarVideo(avatarAsset: Any?, avatarAdjustments: TGVideoEditAdjustments?) -> (Signal<UploadedPeerPhotoData?, NoError>?, Double?) {
+        var videoStartTimestamp: Double? = nil
+        if let adjustments = avatarAdjustments, adjustments.videoStartValue > 0.0 {
+            videoStartTimestamp = adjustments.videoStartValue - adjustments.trimStartValue
+        }
+        
+        let avatarVideo: Signal<UploadedPeerPhotoData?, NoError>?
+        if let avatarAsset = avatarAsset as? AVAsset {
+            let engine = self.engine
+            avatarVideo = Signal<EngineMediaResource?, NoError> { subscriber in
+                let entityRenderer: LegacyPaintEntityRenderer? = avatarAdjustments.flatMap { adjustments in
+                    if let paintingData = adjustments.paintingData, paintingData.hasAnimation {
+                        return LegacyPaintEntityRenderer(postbox: nil, adjustments: adjustments)
+                    } else {
+                        return nil
+                    }
+                }
+                
+                let tempFile = EngineTempBox.shared.tempFile(fileName: "video.mp4")
+                let signal = TGMediaVideoConverter.convert(avatarAsset, adjustments: avatarAdjustments, path: tempFile.path, watcher: nil, entityRenderer: entityRenderer)!
+                
+                let signalDisposable = signal.start(next: { next in
+                    if let result = next as? TGMediaVideoConversionResult {
+                        var value = stat()
+                        if stat(result.fileURL.path, &value) == 0 {
+                            if let data = try? Data(contentsOf: result.fileURL) {
+                                let resource = LocalFileMediaResource(fileId: Int64.random(in: Int64.min ... Int64.max))
+                                engine.resources.storeResourceData(id: EngineMediaResource.Id(resource.id), data: data, synchronous: true)
+                                subscriber.putNext(EngineMediaResource(resource))
+                                
+                                EngineTempBox.shared.dispose(tempFile)
+                            }
+                        }
+                        subscriber.putCompletion()
+                    }
+                }, error: { _ in
+                }, completed: nil)
+                
+                let disposable = ActionDisposable {
+                    signalDisposable?.dispose()
+                }
+                
+                return ActionDisposable {
+                    disposable.dispose()
+                }
+            }
+            |> mapToSignal { resource -> Signal<UploadedPeerPhotoData?, NoError> in
+                if let resource = resource {
+                    return engine.auth.uploadedPeerVideo(resource: resource) |> map(Optional.init)
+                } else {
+                    return .single(nil)
+                }
+            }
+        } else {
+            avatarVideo = nil
+        }
+        return (avatarVideo, videoStartTimestamp)
+    }
+
     private func updateState(state: InnerState) {
         switch state {
         case .authorized:
@@ -1346,6 +1381,22 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                         displayCancel = true
                     }
                     controllers.append(self.signUpController(firstName: firstName, lastName: lastName, termsOfService: termsOfService, displayCancel: displayCancel))
+                    self.setViewControllers(controllers, animated: !self.viewControllers.isEmpty)
+                case let .loginPasswordEntry(number, syncContacts):
+                    var controllers: [ViewController] = []
+                    if !self.otherAccountPhoneNumbers.1.isEmpty {
+                        controllers.append(self.splashController())
+                    }
+                    controllers.append(self.phoneEntryController(countryCode: AuthorizationSequenceCountrySelectionController.defaultCountryCode(), number: "", splashController: nil))
+                    controllers.append(self.telesrvLoginPasswordController(number: number, syncContacts: syncContacts))
+                    self.setViewControllers(controllers, animated: !self.viewControllers.isEmpty)
+                case let .loginPasswordSignUp(number, syncContacts):
+                    var controllers: [ViewController] = []
+                    if !self.otherAccountPhoneNumbers.1.isEmpty {
+                        controllers.append(self.splashController())
+                    }
+                    controllers.append(self.phoneEntryController(countryCode: AuthorizationSequenceCountrySelectionController.defaultCountryCode(), number: "", splashController: nil))
+                    controllers.append(self.telesrvSignUpController(number: number, syncContacts: syncContacts))
                     self.setViewControllers(controllers, animated: !self.viewControllers.isEmpty)
                 case let .payment(number, codeHash, storeProduct, premiumDays, supportEmailAddress, supportEmailSubject, _):
                     var controllers: [ViewController] = []
@@ -1472,5 +1523,273 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
         emailBody.append("MNC: \(mnc)")
         
         AuthorizationSequenceController.presentEmailComposeController(sharedContext: sharedContext, address: "sms@telegram.org", subject: presentationData.strings.Login_EmailCodeSubject(formattedNumber).string, body: emailBody, from: controller, presentationData: presentationData)
+    }
+}
+
+// MARK: - telesrv: phone number + login password
+
+// TgSever docs/password-login.md, code-login-switch.md and sign-up-switch.md. The server publishes its
+// login switches in help.getAppConfig before login; without them (official servers, older telesrv
+// builds, a failed fetch) every path below is the stock code login.
+extension AuthorizationSequenceController {
+    fileprivate func telesrvRefreshLoginConfiguration() {
+        self.telesrvLoginConfigurationDisposable.set((telesrvFetchLoginConfiguration(account: self.account)
+        |> deliverOnMainQueue).startStrict(next: { [weak self] configuration in
+            guard let self else {
+                return
+            }
+            if let configuration {
+                self.telesrvLoginConfiguration = configuration
+            }
+            self.telesrvLoginConfigurationPromise.set(.single(self.telesrvLoginConfiguration))
+        }))
+    }
+
+    /// The server switched password login off while this screen was open.
+    fileprivate func telesrvPasswordLoginWasDisabled() {
+        let signUpDisabled = self.telesrvLoginConfiguration?.signUpDisabled ?? false
+        self.telesrvLoginConfiguration = TelesrvLoginConfiguration(passwordLogin: false, codeLoginDisabled: false, signUpDisabled: signUpDisabled)
+        self.telesrvLoginConfigurationPromise.set(.single(self.telesrvLoginConfiguration))
+        self.telesrvRefreshLoginConfiguration()
+    }
+
+    fileprivate func telesrvPhoneEntryControllerInStack() -> AuthorizationSequencePhoneEntryController? {
+        for c in self.viewControllers {
+            if let c = c as? AuthorizationSequencePhoneEntryController {
+                return c
+            }
+        }
+        return nil
+    }
+
+    fileprivate func telesrvForcedPasswordSetupNotice(_ value: Int32) -> (EngineNoticeEntryKey, EngineCodableEntry)? {
+        guard let entry = EngineCodableEntry(ApplicationSpecificCounterNotice(value: value)) else {
+            return nil
+        }
+        return (ApplicationSpecificNotice.forcedPasswordSetupKey(), entry)
+    }
+
+    fileprivate func telesrvErrorText(_ error: TelesrvLoginPasswordError) -> String {
+        let strings = self.presentationData.strings
+        switch error {
+        case let .floodWait(seconds):
+            if seconds > 0 {
+                return strings.Telesrv_FloodWait(timeIntervalString(strings: strings, value: seconds)).string
+            } else {
+                return strings.Login_CodeFloodError
+            }
+        case .invalidPhoneNumber:
+            return strings.Login_InvalidPhoneError
+        case .signUpDisabled:
+            return strings.Telesrv_SignUpDisabled
+        case .invalidPassword:
+            return strings.LoginPassword_InvalidPasswordError
+        case .invalidFirstName:
+            return strings.Login_InvalidFirstNameError
+        case .notSet:
+            return strings.Telesrv_NoLoginPassword_ContactAdmin
+        case .deviceLimitExceeded:
+            return strings.Telesrv_DeviceLimitExceeded
+        case .deviceIdRequired:
+            return strings.Telesrv_DeviceIdRequired
+        case .passwordLoginDisabled, .phoneNumberOccupied, .accountUnavailable, .restartRequired, .frozen, .generic:
+            return strings.Telesrv_LoginFailed
+        }
+    }
+
+    /// An alert over the phone number page, presented the way its stock errors are.
+    fileprivate func telesrvPresentAlert(over controller: AuthorizationSequencePhoneEntryController?, title: String?, text: String, actions: [TextAlertAction]? = nil) {
+        guard let controller else {
+            return
+        }
+        let actions = actions ?? [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]
+        (controller.navigationController as? NavigationController)?.presentOverlay(controller: textAlertController(sharedContext: self.sharedContext, title: title, text: text, actions: actions), inGlobal: true, blockInteraction: true)
+        controller.dismissConfirmation()
+    }
+
+    fileprivate func telesrvReturnToPhoneEntry() {
+        let countryCode = AuthorizationSequenceCountrySelectionController.defaultCountryCode()
+        let _ = self.engine.auth.setState(state: UnauthorizedAccountState(isTestingEnvironment: self.account.testingEnvironment, masterDatacenterId: self.account.masterDatacenterId, contents: .phoneEntry(countryCode: countryCode, number: ""))).startStandalone()
+    }
+
+    /// The phone number page's Next: password login when the server offers it, else a login code.
+    /// The first Next of a session waits for the server's switches.
+    fileprivate func telesrvRouteLogin(number: String, syncContacts: Bool, phoneController: AuthorizationSequencePhoneEntryController?) {
+        weak var phoneController = phoneController
+        let _ = (self.telesrvLoginConfigurationPromise.get()
+        |> take(1)
+        |> deliverOnMainQueue).startStandalone(next: { [weak self] configuration in
+            guard let self else {
+                return
+            }
+            if let configuration, configuration.passwordLogin {
+                self.telesrvBeginPasswordLogin(number: number, syncContacts: syncContacts, configuration: configuration, phoneController: phoneController)
+            } else {
+                self.telesrvSendCode(number: number, syncContacts: syncContacts, controller: phoneController)
+            }
+        })
+    }
+
+    /// `CODE_LOGIN_DISABLED` from a code request: the cached switches were stale.
+    fileprivate func telesrvCodeLoginWasRefused(number: String, syncContacts: Bool, phoneController: AuthorizationSequencePhoneEntryController?) {
+        weak var phoneController = phoneController
+        let signUpDisabled = self.telesrvLoginConfiguration?.signUpDisabled ?? false
+        let configuration = TelesrvLoginConfiguration(passwordLogin: true, codeLoginDisabled: true, signUpDisabled: signUpDisabled)
+        self.telesrvLoginConfiguration = configuration
+        self.telesrvLoginConfigurationPromise.set(.single(configuration))
+        self.telesrvRefreshLoginConfiguration()
+        phoneController?.inProgress = true
+        self.telesrvBeginPasswordLogin(number: number, syncContacts: syncContacts, configuration: configuration, phoneController: phoneController)
+    }
+
+    fileprivate func telesrvBeginPasswordLogin(number: String, syncContacts: Bool, configuration: TelesrvLoginConfiguration, phoneController: AuthorizationSequencePhoneEntryController?) {
+        weak var phoneController = phoneController
+        phoneController?.inProgress = true
+        self.actionDisposable.set((telesrvBeginLoginPassword(account: self.account, phoneNumber: number, syncContacts: syncContacts)
+        |> deliverOnMainQueue).startStrict(next: { _ in
+            phoneController?.inProgress = false
+        }, error: { [weak self] error in
+            guard let self else {
+                return
+            }
+            phoneController?.inProgress = false
+            let strings = self.presentationData.strings
+            switch error {
+            case .notSet:
+                if configuration.codeLoginDisabled {
+                    self.telesrvPresentAlert(over: phoneController, title: strings.Telesrv_NoLoginPassword_Title, text: strings.Telesrv_NoLoginPassword_ContactAdmin)
+                } else {
+                    self.telesrvPresentAlert(over: phoneController, title: strings.Telesrv_NoLoginPassword_Title, text: strings.Telesrv_NoLoginPassword_Text, actions: [
+                        TextAlertAction(type: .genericAction, title: strings.Common_Cancel, action: {}),
+                        TextAlertAction(type: .defaultAction, title: strings.Telesrv_UseCode, action: { [weak self] in
+                            self?.telesrvSendCode(number: number, syncContacts: syncContacts, controller: phoneController)
+                        })
+                    ])
+                }
+            case .passwordLoginDisabled:
+                self.telesrvPasswordLoginWasDisabled()
+                self.telesrvSendCode(number: number, syncContacts: syncContacts, controller: phoneController)
+            default:
+                self.telesrvPresentAlert(over: phoneController, title: nil, text: self.telesrvErrorText(error))
+            }
+        }))
+    }
+
+    fileprivate func telesrvLoginPasswordController(number: String, syncContacts: Bool) -> AuthorizationSequencePasswordEntryController {
+        let mode: AuthorizationSequencePasswordEntryMode = .loginPassword(number: formatPhoneNumber(number))
+        for c in self.viewControllers {
+            if let c = c as? AuthorizationSequencePasswordEntryController, c.mode == mode {
+                return c
+            }
+        }
+        let controller = AuthorizationSequencePasswordEntryController(sharedContext: self.sharedContext, presentationData: self.presentationData, mode: mode, back: { [weak self] in
+            self?.telesrvReturnToPhoneEntry()
+        })
+        controller.loginWithPassword = { [weak self, weak controller] password in
+            guard let self else {
+                return
+            }
+            controller?.inProgress = true
+            self.actionDisposable.set((telesrvSignInWithLoginPassword(accountManager: self.sharedContext.accountManager, account: self.account, password: password, forcedPasswordSetupNotice: { [weak self] value in
+                return self?.telesrvForcedPasswordSetupNotice(value)
+            })
+            |> deliverOnMainQueue).startStrict(error: { [weak self, weak controller] error in
+                guard let self, let controller else {
+                    return
+                }
+                controller.inProgress = false
+                let strings = self.presentationData.strings
+                let ok = TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})
+                switch error {
+                case .invalidPassword:
+                    controller.present(textAlertController(sharedContext: self.sharedContext, title: nil, text: strings.LoginPassword_InvalidPasswordError, actions: [ok]), in: .window(.root))
+                    controller.passwordIsInvalid()
+                case .passwordLoginDisabled:
+                    self.telesrvPasswordLoginWasDisabled()
+                    self.telesrvSendCode(number: number, syncContacts: syncContacts, controller: self.telesrvPhoneEntryControllerInStack())
+                case .restartRequired, .notSet, .accountUnavailable, .signUpDisabled:
+                    // The account behind the number changed: the phone number page asks the server again.
+                    controller.present(textAlertController(sharedContext: self.sharedContext, title: nil, text: self.telesrvErrorText(error), actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: { [weak self] in
+                        self?.telesrvReturnToPhoneEntry()
+                    })]), in: .window(.root))
+                default:
+                    controller.present(textAlertController(sharedContext: self.sharedContext, title: nil, text: self.telesrvErrorText(error), actions: [ok]), in: .window(.root))
+                }
+            }))
+        }
+        controller.forgot = { [weak self, weak controller] in
+            guard let self, let controller else {
+                return
+            }
+            let strings = self.presentationData.strings
+            if self.telesrvLoginConfiguration?.codeLoginDisabled == true {
+                controller.present(textAlertController(sharedContext: self.sharedContext, title: nil, text: strings.Telesrv_LoginPassword_ForgotNoCode, actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), in: .window(.root))
+            } else {
+                controller.present(textAlertController(sharedContext: self.sharedContext, title: nil, text: strings.Telesrv_LoginPassword_ForgotText, actions: [
+                    TextAlertAction(type: .genericAction, title: strings.Common_Cancel, action: {}),
+                    TextAlertAction(type: .defaultAction, title: strings.Telesrv_LoginPassword_UseCode, action: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.telesrvSendCode(number: number, syncContacts: syncContacts, controller: self.telesrvPhoneEntryControllerInStack())
+                    })
+                ]), in: .window(.root))
+            }
+        }
+        controller.updateData(hint: self.presentationData.strings.Telesrv_LoginPassword_Placeholder, suggestReset: false)
+        return controller
+    }
+
+    fileprivate func telesrvSignUpController(number: String, syncContacts: Bool) -> AuthorizationSequenceSignUpController {
+        let formattedNumber = formatPhoneNumber(number)
+        for c in self.viewControllers {
+            if let c = c as? AuthorizationSequenceSignUpController, c.loginPasswordNumber == formattedNumber {
+                return c
+            }
+        }
+        let controller = AuthorizationSequenceSignUpController(sharedContext: self.sharedContext, presentationData: self.presentationData, loginPasswordNumber: formattedNumber, back: { [weak self] in
+            self?.telesrvReturnToPhoneEntry()
+        }, displayCancel: self.otherAccountPhoneNumbers.1.isEmpty)
+        controller.openUrl = { [weak self] url in
+            self?.openUrl(url)
+        }
+        controller.signUpWithLoginPassword = { [weak self, weak controller] firstName, lastName, password, avatarData, avatarAsset, avatarAdjustments in
+            guard let self else {
+                return
+            }
+            controller?.inProgress = true
+
+            let (avatarVideo, videoStartTimestamp) = self.signUpAvatarVideo(avatarAsset: avatarAsset, avatarAdjustments: avatarAdjustments)
+            let avatar = avatarData.flatMap { data in
+                return TelesrvSignUpAvatar(data: data, video: avatarVideo, videoStartTimestamp: videoStartTimestamp)
+            }
+
+            self.actionDisposable.set((telesrvSignUpWithLoginPassword(accountManager: self.sharedContext.accountManager, account: self.account, firstName: firstName, lastName: lastName, password: password, avatar: avatar, forcedPasswordSetupNotice: { [weak self] value in
+                return self?.telesrvForcedPasswordSetupNotice(value)
+            })
+            |> deliverOnMainQueue).startStrict(error: { [weak self, weak controller] error in
+                guard let self, let controller else {
+                    return
+                }
+                controller.inProgress = false
+                let strings = self.presentationData.strings
+                switch error {
+                case .phoneNumberOccupied:
+                    // Registered meanwhile: the state is now sign-in, which replaces this page.
+                    break
+                case .passwordLoginDisabled:
+                    self.telesrvPasswordLoginWasDisabled()
+                    self.telesrvSendCode(number: number, syncContacts: syncContacts, controller: self.telesrvPhoneEntryControllerInStack())
+                case .signUpDisabled, .restartRequired:
+                    controller.present(textAlertController(sharedContext: self.sharedContext, title: nil, text: self.telesrvErrorText(error), actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: { [weak self] in
+                        self?.telesrvReturnToPhoneEntry()
+                    })]), in: .window(.root))
+                default:
+                    controller.present(textAlertController(sharedContext: self.sharedContext, title: nil, text: self.telesrvErrorText(error), actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), in: .window(.root))
+                }
+            }))
+        }
+        controller.updateData(firstName: "", lastName: "", termsOfService: nil)
+        return controller
     }
 }

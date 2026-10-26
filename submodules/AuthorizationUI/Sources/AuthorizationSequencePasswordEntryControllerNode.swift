@@ -13,6 +13,7 @@ import SolidRoundedButtonNode
 final class AuthorizationSequencePasswordEntryControllerNode: ASDisplayNode, UITextFieldDelegate {
     private let strings: PresentationStrings
     private let theme: PresentationTheme
+    private let titleText: String
     
     private let animationNode: AnimatedStickerNode
     private let titleNode: ASTextNode
@@ -59,9 +60,22 @@ final class AuthorizationSequencePasswordEntryControllerNode: ASDisplayNode, UIT
     
     private let appearanceTimestamp = CACurrentMediaTime()
     
-    init(strings: PresentationStrings, theme: PresentationTheme) {
+    init(strings: PresentationStrings, theme: PresentationTheme, mode: AuthorizationSequencePasswordEntryMode) {
         self.strings = strings
         self.theme = theme
+        
+        let noticeText: String
+        let forgotText: String
+        switch mode {
+        case .cloudPassword:
+            self.titleText = strings.LoginPassword_Title
+            noticeText = strings.TwoStepAuth_EnterPasswordHelp
+            forgotText = strings.TwoStepAuth_EnterPasswordForgot
+        case let .loginPassword(number):
+            self.titleText = strings.Telesrv_LoginPassword_Title
+            noticeText = strings.Telesrv_LoginPassword_Text(number).string
+            forgotText = strings.Telesrv_LoginPassword_Forgot
+        }
         
         self.animationNode = DefaultAnimatedStickerNodeImpl(lottieSettings: .noAccountFallback)
         self.animationNode.setup(source: AnimatedStickerNodeLocalFileSource(name: "IntroPassword"), width: 256, height: 256, playbackMode: .still(.start), mode: .direct(cachePathPrefix: nil))
@@ -69,7 +83,7 @@ final class AuthorizationSequencePasswordEntryControllerNode: ASDisplayNode, UIT
         self.titleNode = ASTextNode()
         self.titleNode.isUserInteractionEnabled = false
         self.titleNode.displaysAsynchronously = false
-        self.titleNode.attributedText = NSAttributedString(string: strings.LoginPassword_Title, font: Font.semibold(28.0), textColor: self.theme.list.itemPrimaryTextColor)
+        self.titleNode.attributedText = NSAttributedString(string: self.titleText, font: Font.semibold(28.0), textColor: self.theme.list.itemPrimaryTextColor)
         
         self.titleActivateAreaNode = AccessibilityAreaNode()
         self.titleActivateAreaNode.accessibilityTraits = .staticText
@@ -78,15 +92,15 @@ final class AuthorizationSequencePasswordEntryControllerNode: ASDisplayNode, UIT
         self.noticeNode.isUserInteractionEnabled = false
         self.noticeNode.displaysAsynchronously = false
         self.noticeNode.lineSpacing = 0.1
-        self.noticeNode.attributedText = NSAttributedString(string: strings.TwoStepAuth_EnterPasswordHelp, font: Font.regular(17.0), textColor: self.theme.list.itemPrimaryTextColor, paragraphAlignment: .center)
+        self.noticeNode.attributedText = NSAttributedString(string: noticeText, font: Font.regular(17.0), textColor: self.theme.list.itemPrimaryTextColor, paragraphAlignment: .center)
         
         self.noticeActivateAreaNode = AccessibilityAreaNode()
         self.noticeActivateAreaNode.accessibilityTraits = .staticText
         
         self.forgotNode = HighlightableButtonNode()
         self.forgotNode.displaysAsynchronously = false
-        self.forgotNode.setAttributedTitle(NSAttributedString(string: self.strings.TwoStepAuth_EnterPasswordForgot, font: Font.regular(16.0), textColor: self.theme.list.itemAccentColor, paragraphAlignment: .center), for: [])
-        self.forgotNode.accessibilityLabel = self.strings.TwoStepAuth_EnterPasswordForgot
+        self.forgotNode.setAttributedTitle(NSAttributedString(string: forgotText, font: Font.regular(16.0), textColor: self.theme.list.itemAccentColor, paragraphAlignment: .center), for: [])
+        self.forgotNode.accessibilityLabel = forgotText
         self.forgotNode.accessibilityTraits = [.button]
         
         self.resetNode = HighlightableButtonNode()
@@ -197,7 +211,7 @@ final class AuthorizationSequencePasswordEntryControllerNode: ASDisplayNode, UIT
         let titleInset: CGFloat = layout.size.width > 320.0 ? 18.0 : 0.0
         let additionalBottomInset: CGFloat = layout.size.width > 320.0 ? 110.0 : 20.0
         
-        self.titleNode.attributedText = NSAttributedString(string: self.strings.LoginPassword_Title, font: Font.semibold(28.0), textColor: self.theme.list.itemPrimaryTextColor)
+        self.titleNode.attributedText = NSAttributedString(string: self.titleText, font: Font.semibold(28.0), textColor: self.theme.list.itemPrimaryTextColor)
         
         let animationSize = CGSize(width: 100.0, height: 100.0)
         let titleSize = self.titleNode.measure(CGSize(width: maximumWidth, height: CGFloat.greatestFiniteMagnitude))

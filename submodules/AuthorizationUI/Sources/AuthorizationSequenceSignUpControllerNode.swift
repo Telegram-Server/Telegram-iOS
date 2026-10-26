@@ -22,11 +22,30 @@ private func roundCorners(diameter: CGFloat) -> UIImage {
     return image
 }
 
+private func makeSignUpPasswordField(theme: PresentationTheme, placeholder: String, returnKeyType: UIReturnKeyType) -> TextFieldNode {
+    let field = TextFieldNode()
+    field.textField.font = Font.regular(20.0)
+    field.textField.textColor = theme.list.itemPrimaryTextColor
+    field.textField.textAlignment = .natural
+    field.textField.returnKeyType = returnKeyType
+    field.textField.isSecureTextEntry = true
+    field.textField.textContentType = .newPassword
+    field.textField.attributedPlaceholder = NSAttributedString(string: placeholder, font: Font.regular(20.0), textColor: theme.list.itemPlaceholderTextColor)
+    field.textField.autocapitalizationType = .none
+    field.textField.autocorrectionType = .no
+    field.textField.keyboardAppearance = theme.rootController.keyboardColor.keyboardAppearance
+    field.textField.tintColor = theme.list.itemAccentColor
+    return field
+}
+
 final class AuthorizationSequenceSignUpControllerNode: ASDisplayNode, UITextFieldDelegate {
     private let theme: PresentationTheme
     private let strings: PresentationStrings
     private let addPhoto: () -> Void
-    
+    /// Sign-up with a telesrv login password: the page also asks for the password, twice.
+    private let loginPasswordNumber: String?
+    private let titleText: String
+
     private let titleNode: ASTextNode
     private let currentOptionNode: ASTextNode
     private let termsNode: ImmediateTextNode
@@ -35,6 +54,10 @@ final class AuthorizationSequenceSignUpControllerNode: ASDisplayNode, UITextFiel
     private let lastNameField: TextFieldNode
     private let firstSeparatorNode: ASDisplayNode
     private let lastSeparatorNode: ASDisplayNode
+    private let passwordField: TextFieldNode
+    private let passwordSeparatorNode: ASDisplayNode
+    private let confirmPasswordField: TextFieldNode
+    private let confirmPasswordSeparatorNode: ASDisplayNode
     private let currentPhotoNode: ASImageNode
     private let addPhotoButton: HighlightableButtonNode
     private let proceedNode: SolidRoundedButtonNode
@@ -46,7 +69,11 @@ final class AuthorizationSequenceSignUpControllerNode: ASDisplayNode, UITextFiel
     var currentName: (String, String) {
         return (self.firstNameField.textField.text ?? "", self.lastNameField.textField.text ?? "")
     }
-    
+
+    var currentPassword: (String, String) {
+        return (self.passwordField.textField.text ?? "", self.confirmPasswordField.textField.text ?? "")
+    }
+
     var currentPhoto: UIImage? = nil {
         didSet {
             if let currentPhoto = self.currentPhoto {
@@ -70,6 +97,8 @@ final class AuthorizationSequenceSignUpControllerNode: ASDisplayNode, UITextFiel
         didSet {
             self.firstNameField.alpha = self.inProgress ? 0.6 : 1.0
             self.lastNameField.alpha = self.inProgress ? 0.6 : 1.0
+            self.passwordField.alpha = self.inProgress ? 0.6 : 1.0
+            self.confirmPasswordField.alpha = self.inProgress ? 0.6 : 1.0
             
             if self.inProgress != oldValue {
                 if self.inProgress {
@@ -81,21 +110,29 @@ final class AuthorizationSequenceSignUpControllerNode: ASDisplayNode, UITextFiel
         }
     }
     
-    init(theme: PresentationTheme, strings: PresentationStrings, addPhoto: @escaping () -> Void) {
+    init(theme: PresentationTheme, strings: PresentationStrings, loginPasswordNumber: String?, addPhoto: @escaping () -> Void) {
         self.theme = theme
         self.strings = strings
         self.addPhoto = addPhoto
-        
+        self.loginPasswordNumber = loginPasswordNumber
+        self.titleText = loginPasswordNumber != nil ? strings.Telesrv_SignUp_Title : strings.Login_InfoTitle
+
         self.titleNode = ASTextNode()
         self.titleNode.isUserInteractionEnabled = false
         self.titleNode.displaysAsynchronously = false
-        self.titleNode.attributedText = NSAttributedString(string: self.strings.Login_InfoTitle, font: Font.semibold(28.0), textColor: theme.list.itemPrimaryTextColor)
+        self.titleNode.attributedText = NSAttributedString(string: self.titleText, font: Font.semibold(28.0), textColor: theme.list.itemPrimaryTextColor)
         self.titleNode.accessibilityIdentifier = "Auth.SetName.Title"
 
         self.currentOptionNode = ASTextNode()
         self.currentOptionNode.isUserInteractionEnabled = false
         self.currentOptionNode.displaysAsynchronously = false
-        self.currentOptionNode.attributedText = NSAttributedString(string: self.strings.Login_InfoHelp, font: Font.regular(16.0), textColor: theme.list.itemPrimaryTextColor, paragraphAlignment: .center)
+        let noticeText: String
+        if let loginPasswordNumber = loginPasswordNumber {
+            noticeText = strings.Telesrv_SignUp_Text(loginPasswordNumber).string
+        } else {
+            noticeText = strings.Login_InfoHelp
+        }
+        self.currentOptionNode.attributedText = NSAttributedString(string: noticeText, font: Font.regular(16.0), textColor: theme.list.itemPrimaryTextColor, paragraphAlignment: .center)
         
         self.termsNode = ImmediateTextNode()
         self.termsNode.textAlignment = .center
@@ -143,6 +180,20 @@ final class AuthorizationSequenceSignUpControllerNode: ASDisplayNode, UITextFiel
         self.lastNameField.textField.tintColor = theme.list.itemAccentColor
         self.lastNameField.textField.accessibilityIdentifier = "Auth.SetName.LastNameField"
 
+        self.passwordSeparatorNode = ASDisplayNode()
+        self.passwordSeparatorNode.isLayerBacked = true
+        self.passwordSeparatorNode.backgroundColor = theme.list.itemPlainSeparatorColor
+
+        self.confirmPasswordSeparatorNode = ASDisplayNode()
+        self.confirmPasswordSeparatorNode.isLayerBacked = true
+        self.confirmPasswordSeparatorNode.backgroundColor = theme.list.itemPlainSeparatorColor
+
+        self.passwordField = makeSignUpPasswordField(theme: theme, placeholder: strings.Telesrv_SignUp_PasswordPlaceholder, returnKeyType: .next)
+        self.confirmPasswordField = makeSignUpPasswordField(theme: theme, placeholder: strings.Telesrv_SignUp_ConfirmPasswordPlaceholder, returnKeyType: .done)
+        if loginPasswordNumber != nil {
+            self.lastNameField.textField.returnKeyType = .next
+        }
+
         self.currentPhotoNode = ASImageNode()
         self.currentPhotoNode.isUserInteractionEnabled = false
         self.currentPhotoNode.displaysAsynchronously = false
@@ -169,11 +220,19 @@ final class AuthorizationSequenceSignUpControllerNode: ASDisplayNode, UITextFiel
         
         self.firstNameField.textField.delegate = self
         self.lastNameField.textField.delegate = self
-        
+        self.passwordField.textField.delegate = self
+        self.confirmPasswordField.textField.delegate = self
+
         self.addSubnode(self.firstSeparatorNode)
         self.addSubnode(self.lastSeparatorNode)
         self.addSubnode(self.firstNameField)
         self.addSubnode(self.lastNameField)
+        if loginPasswordNumber != nil {
+            self.addSubnode(self.passwordSeparatorNode)
+            self.addSubnode(self.confirmPasswordSeparatorNode)
+            self.addSubnode(self.passwordField)
+            self.addSubnode(self.confirmPasswordField)
+        }
         self.addSubnode(self.titleNode)
         self.addSubnode(self.currentOptionNode)
         self.addSubnode(self.termsNode)
@@ -247,7 +306,7 @@ final class AuthorizationSequenceSignUpControllerNode: ASDisplayNode, UITextFiel
         
         let additionalBottomInset: CGFloat = layout.size.width > 320.0 ? 90.0 : 10.0
                 
-        self.titleNode.attributedText = NSAttributedString(string: self.strings.Login_InfoTitle, font: Font.semibold(28.0), textColor: self.theme.list.itemPrimaryTextColor)
+        self.titleNode.attributedText = NSAttributedString(string: self.titleText, font: Font.semibold(28.0), textColor: self.theme.list.itemPrimaryTextColor)
         let titleSize = self.titleNode.measure(CGSize(width: maximumWidth, height: CGFloat.greatestFiniteMagnitude))
         
         let fieldHeight: CGFloat = 54.0
@@ -271,7 +330,14 @@ final class AuthorizationSequenceSignUpControllerNode: ASDisplayNode, UITextFiel
         
         items.append(AuthorizationLayoutItem(node: self.lastNameField, size: CGSize(width: bandWidth - (sideInset + innerInset) * 2.0, height: fieldHeight), spacingBefore: AuthorizationLayoutItemSpacing(weight: 0.0, maxValue: 0.0), spacingAfter: AuthorizationLayoutItemSpacing(weight: 0.0, maxValue: 0.0)))
         items.append(AuthorizationLayoutItem(node: self.lastSeparatorNode, size: CGSize(width: bandWidth - sideInset * 2.0, height: UIScreenPixel), spacingBefore: AuthorizationLayoutItemSpacing(weight: 0.0, maxValue: 0.0), spacingAfter: AuthorizationLayoutItemSpacing(weight: 0.0, maxValue: 0.0)))
-        
+
+        if self.loginPasswordNumber != nil {
+            items.append(AuthorizationLayoutItem(node: self.passwordField, size: CGSize(width: bandWidth - (sideInset + innerInset) * 2.0, height: fieldHeight), spacingBefore: AuthorizationLayoutItemSpacing(weight: 0.0, maxValue: 0.0), spacingAfter: AuthorizationLayoutItemSpacing(weight: 0.0, maxValue: 0.0)))
+            items.append(AuthorizationLayoutItem(node: self.passwordSeparatorNode, size: CGSize(width: bandWidth - sideInset * 2.0, height: UIScreenPixel), spacingBefore: AuthorizationLayoutItemSpacing(weight: 0.0, maxValue: 0.0), spacingAfter: AuthorizationLayoutItemSpacing(weight: 0.0, maxValue: 0.0)))
+            items.append(AuthorizationLayoutItem(node: self.confirmPasswordField, size: CGSize(width: bandWidth - (sideInset + innerInset) * 2.0, height: fieldHeight), spacingBefore: AuthorizationLayoutItemSpacing(weight: 0.0, maxValue: 0.0), spacingAfter: AuthorizationLayoutItemSpacing(weight: 0.0, maxValue: 0.0)))
+            items.append(AuthorizationLayoutItem(node: self.confirmPasswordSeparatorNode, size: CGSize(width: bandWidth - sideInset * 2.0, height: UIScreenPixel), spacingBefore: AuthorizationLayoutItemSpacing(weight: 0.0, maxValue: 0.0), spacingAfter: AuthorizationLayoutItemSpacing(weight: 0.0, maxValue: 0.0)))
+        }
+
         items.append(AuthorizationLayoutItem(node: self.termsNode, size: termsSize, spacingBefore: AuthorizationLayoutItemSpacing(weight: 48.0, maxValue: 100.0), spacingAfter: AuthorizationLayoutItemSpacing(weight: 0.0, maxValue: 0.0)))
         
         if layout.size.width > 320.0 {
@@ -299,9 +365,24 @@ final class AuthorizationSequenceSignUpControllerNode: ASDisplayNode, UITextFiel
         }
     }
     
+    func animatePasswordError() {
+        if (self.passwordField.textField.text ?? "").isEmpty {
+            self.passwordField.layer.addShakeAnimation()
+            self.passwordField.textField.becomeFirstResponder()
+        } else {
+            self.confirmPasswordField.textField.text = ""
+            self.confirmPasswordField.layer.addShakeAnimation()
+            self.confirmPasswordField.textField.becomeFirstResponder()
+        }
+    }
+
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
         if textField === self.firstNameField.textField {
             self.lastNameField.textField.becomeFirstResponder()
+        } else if self.loginPasswordNumber != nil && textField === self.lastNameField.textField {
+            self.passwordField.textField.becomeFirstResponder()
+        } else if textField === self.passwordField.textField {
+            self.confirmPasswordField.textField.becomeFirstResponder()
         } else {
             let name = self.currentName
             self.signUpWithName?(name.0, name.1)
