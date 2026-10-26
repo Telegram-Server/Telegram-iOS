@@ -8651,6 +8651,12 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         guard case let .peer(peerId) = self.chatLocation else {
             return
         }
+        // telesrv staff permissions: TelegramCore refuses clearing a private chat; say why instead of
+        // showing the history cleared and bringing it back.
+        if type != .scheduledMessages && !self.context.telesrvPermissions.canClearHistory(peerId: peerId) {
+            self.present(textAlertController(context: self.context, title: nil, text: self.presentationData.strings.Telesrv_Permission_Denied, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+            return
+        }
         self.updateChatPresentationInterfaceState(animated: true, interactive: true, { $0.updatedInterfaceState { $0.withoutSelectionState() } })
         self.chatDisplayNode.historyNode.historyAppearsCleared = true
         
@@ -9889,6 +9895,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
     
     func addPeerContact() {
+        // telesrv staff permissions: say why instead of opening a form whose save would be refused.
+        if !self.context.telesrvPermissions.allows(.addContact) {
+            self.present(textAlertController(context: self.context, title: nil, text: self.presentationData.strings.Telesrv_Permission_Denied, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+            return
+        }
         if let peer = self.presentationInterfaceState.renderedPeer?.chatMainPeer as? TelegramUser, let peerStatusSettings = self.presentationInterfaceState.contactStatus?.peerStatusSettings {
             let controller = self.context.sharedContext.makeNewContactScreen(
                 context: self.context,

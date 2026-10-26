@@ -41,17 +41,25 @@ final class ComposeControllerNode: ASDisplayNode {
         var openCreateContactImpl: (() -> Void)?
         var openCreateNewChannelImpl: (() -> Void)?
         
-        self.contactListNode = ContactListNode(context: context, presentation: .single(.natural(options: [
-            ContactListAdditionalOption(title: self.presentationData.strings.Compose_NewGroup, icon: .generic(UIImage(bundleImageName: "Contact List/CreateGroupActionIcon")!), action: {
+        // telesrv staff permissions: the entries the administrator restricted are not offered.
+        let telesrvPermissions = context.telesrvPermissions
+        var options: [ContactListAdditionalOption] = []
+        if telesrvPermissions.canCreate(isBroadcast: false) {
+            options.append(ContactListAdditionalOption(title: self.presentationData.strings.Compose_NewGroup, icon: .generic(UIImage(bundleImageName: "Contact List/CreateGroupActionIcon")!), action: {
                 openCreateNewGroupImpl?()
-            }),
-            ContactListAdditionalOption(title: self.presentationData.strings.NewContact_Title, icon: .generic(UIImage(bundleImageName: "Contact List/AddMemberIcon")!), action: {
+            }))
+        }
+        if telesrvPermissions.allows(.addContact) {
+            options.append(ContactListAdditionalOption(title: self.presentationData.strings.NewContact_Title, icon: .generic(UIImage(bundleImageName: "Contact List/AddMemberIcon")!), action: {
                 openCreateContactImpl?()
-            }),
-            ContactListAdditionalOption(title: self.presentationData.strings.Compose_NewChannel, icon: .generic(UIImage(bundleImageName: "Contact List/CreateChannelActionIcon")!), action: {
+            }))
+        }
+        if telesrvPermissions.canCreate(isBroadcast: true) {
+            options.append(ContactListAdditionalOption(title: self.presentationData.strings.Compose_NewChannel, icon: .generic(UIImage(bundleImageName: "Contact List/CreateChannelActionIcon")!), action: {
                 openCreateNewChannelImpl?()
-            })
-        ], includeChatList: false, topPeers: .none)), onlyWriteable: false, isGroupInvitation: false, displayPermissionPlaceholder: false)
+            }))
+        }
+        self.contactListNode = ContactListNode(context: context, presentation: .single(.natural(options: options, includeChatList: false, topPeers: .none)), onlyWriteable: false, isGroupInvitation: false, displayPermissionPlaceholder: false)
         
         super.init()
         

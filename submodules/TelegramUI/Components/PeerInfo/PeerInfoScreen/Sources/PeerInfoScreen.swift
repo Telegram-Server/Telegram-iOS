@@ -3320,7 +3320,21 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         })
     }
     
+    /// telesrv staff permissions: TelegramCore refuses clearing, deleting and leaving the account may
+    /// not do; this says why instead of doing nothing.
+    func telesrvRefuse(_ allowed: Bool) -> Bool {
+        if allowed {
+            return false
+        }
+        self.controller?.present(textAlertController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, title: nil, text: self.presentationData.strings.Telesrv_Permission_Denied, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+        return true
+    }
+    
     func openClearHistory(contextController: ContextControllerProtocol, clearPeerHistory: ClearPeerHistory, chatPeer: EnginePeer) {
+        if self.telesrvRefuse(self.context.telesrvPermissions.canClearHistory(peerId: chatPeer.id)) {
+            contextController.dismiss(completion: nil)
+            return
+        }
         var subItems: [ContextMenuItem] = []
         
         subItems.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Common_Back, icon: { theme in
@@ -3535,6 +3549,9 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     }
     
     func openAddContact() {
+        if self.telesrvRefuse(self.context.telesrvPermissions.allows(.addContact)) {
+            return
+        }
         let _ = (getUserPeer(engine: self.context.engine, peerId: self.peerId)
         |> deliverOnMainQueue).startStandalone(next: { [weak self] peer in
             guard let strongSelf = self, let peer = peer else {
@@ -4629,6 +4646,9 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             guard let strongSelf = self, let peer = peer else {
                 return
             }
+            if strongSelf.telesrvRefuse(strongSelf.context.telesrvPermissions.canDeleteChat(peer: peer)) {
+                return
+            }
             var isGroup = false
             if case let .channel(channel) = peer {
                 if case .group = channel.info {
@@ -4672,6 +4692,9 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: self.peerId))
         |> deliverOnMainQueue).startStandalone(next: { [weak self] peer in
             guard let strongSelf = self, let peer = peer else {
+                return
+            }
+            if strongSelf.telesrvRefuse(strongSelf.context.telesrvPermissions.canLeave(peer: peer)) {
                 return
             }
             
@@ -4722,6 +4745,9 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     
     private func deletePeerChat(peer: EnginePeer, globally: Bool) {
         guard let controller = self.controller, let navigationController = controller.navigationController as? NavigationController else {
+            return
+        }
+        if self.telesrvRefuse(self.context.telesrvPermissions.canDeleteChat(peer: peer)) {
             return
         }
         guard let navigationTarget = resolveChatListNavigationTarget(navigationController: navigationController, excluding: controller) else {

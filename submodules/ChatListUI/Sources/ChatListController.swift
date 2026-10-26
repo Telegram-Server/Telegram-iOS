@@ -5453,6 +5453,10 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             }
             strongSelf.view.window?.endEditing(true)
             
+            if strongSelf.telesrvRefuseChatRemoval(peer: chatPeer) {
+                return
+            }
+            
             var canRemoveGlobally = false
             let limitsConfiguration = strongSelf.context.currentLimitsConfiguration.with { $0 }
             if peer.peerId.namespace == Namespaces.Peer.CloudUser && peer.peerId != strongSelf.context.account.peerId {
@@ -6174,8 +6178,21 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         })
     }
     
+    /// telesrv staff permissions: deleting a private chat clears it and deleting a group or channel
+    /// leaves it. TelegramCore refuses the removal itself; this says why instead of doing nothing.
+    func telesrvRefuseChatRemoval(peer: EnginePeer) -> Bool {
+        if self.context.telesrvPermissions.canDeleteChat(peer: peer) {
+            return false
+        }
+        self.present(textAlertController(context: self.context, title: nil, text: self.presentationData.strings.Telesrv_Permission_Denied, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+        return true
+    }
+    
     private func schedulePeerChatRemoval(peer: EngineRenderedPeer, type: InteractiveMessagesDeletionType, deleteGloballyIfPossible: Bool, completion: @escaping () -> Void) {
         guard let chatPeer = peer.peers[peer.peerId] else {
+            return
+        }
+        if self.telesrvRefuseChatRemoval(peer: chatPeer) {
             return
         }
         

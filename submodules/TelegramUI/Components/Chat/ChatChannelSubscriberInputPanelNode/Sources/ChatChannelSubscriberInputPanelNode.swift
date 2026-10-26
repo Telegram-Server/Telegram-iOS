@@ -444,6 +444,12 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
     /// `isAddToChats`: the News menu's Add to Chats, which the bar shows at once and holds until the channel is stored
     /// joined, and which closing the chat does not cancel. `muteAfterJoin` mutes the channel once joined.
     private func startJoin(context: AccountContext, peer: EnginePeer, isAddToChats: Bool = false, muteAfterJoin: Bool = false, onJoined: (() -> Void)? = nil) {
+        // telesrv staff permissions: say why the join would be refused instead of sending it.
+        if !context.telesrvPermissions.canJoin(peer: peer) {
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            self.interfaceInteraction?.presentController(textAlertController(context: context, title: nil, text: presentationData.strings.Telesrv_Permission_JoinRestricted, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), nil)
+            return
+        }
         self.isJoining = true
         if isAddToChats {
             self.addToChatsRequest = NewsChannelBarRequest(kind: .addToChats)

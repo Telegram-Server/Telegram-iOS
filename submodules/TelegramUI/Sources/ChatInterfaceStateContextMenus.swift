@@ -51,6 +51,12 @@ private struct MessageContextMenuData {
 }
 
 func canEditMessage(context: AccountContext, limitsConfiguration: EngineConfiguration.Limits, message: EngineRawMessage) -> Bool {
+    // telesrv staff permissions: editing a message the chat has is refused (the long-press menu, the
+    // up arrow, the attachment menu and the chat's own edit paths all ask here). Scheduled messages
+    // have not reached the chat yet.
+    if message.id.namespace == Namespaces.Message.Cloud && !context.telesrvPermissions.allows(.edit) {
+        return false
+    }
     return canEditMessage(accountPeerId: context.account.peerId, limitsConfiguration: limitsConfiguration, message: message)
 }
 

@@ -1628,6 +1628,12 @@ public final class ContactListNode: ASDisplayNode {
                                     break
                                 }
                             }
+                            // telesrv send whitelist: users outside it may not be messaged.
+                            if context.telesrvPermissions.sendWhitelistEnabled {
+                                for foundPeer in localPeersAndStatuses.0 + remotePeers.0 + remotePeers.1 where !context.telesrvInSendWhitelist(foundPeer.peer) {
+                                    disabledPeerIds.insert(foundPeer.peer.id)
+                                }
+                            }
                             
                             var peers: [ContactListPeer] = []
                             
@@ -1958,6 +1964,12 @@ public final class ContactListNode: ASDisplayNode {
                                     requirePhoneNumbers = true
                                 case .excludeBots:
                                     break
+                                }
+                            }
+                            // telesrv send whitelist: users outside it may not be messaged.
+                            if context.telesrvPermissions.sendWhitelistEnabled {
+                                for case let .peer(peer, _, _) in peers where !context.telesrvInSendWhitelist(peer) {
+                                    disabledPeerIds.insert(peer.id)
                                 }
                             }
                             

@@ -486,7 +486,7 @@ public final class ContactsSearchContainerNode: SearchDisplayControllerContentNo
                         var enabled = true
                         var requiresPremiumForMessaging = false
                         if onlyWriteable {
-                            enabled = canSendMessagesToPeer(peer)
+                            enabled = context.telesrvCanSendMessagesToPeer(peer)
                             if let value = peerRequiresPremiumForMessaging[peer.id], value {
                                 requiresPremiumForMessaging = true
                                 enabled = false
@@ -526,7 +526,7 @@ public final class ContactsSearchContainerNode: SearchDisplayControllerContentNo
                                 var enabled = true
                                 var requiresPremiumForMessaging = false
                                 if onlyWriteable {
-                                    enabled = canSendMessagesToPeer(peer.peer)
+                                    enabled = context.telesrvCanSendMessagesToPeer(peer.peer)
                                     if let value = peerRequiresPremiumForMessaging[peer.peer.id], value {
                                         requiresPremiumForMessaging = true
                                         enabled = false
@@ -560,7 +560,7 @@ public final class ContactsSearchContainerNode: SearchDisplayControllerContentNo
                                 var enabled = true
                                 var requiresPremiumForMessaging = false
                                 if onlyWriteable {
-                                    enabled = canSendMessagesToPeer(peer.peer)
+                                    enabled = context.telesrvCanSendMessagesToPeer(peer.peer)
                                     if let value = peerRequiresPremiumForMessaging[peer.peer.id], value {
                                         requiresPremiumForMessaging = true
                                         enabled = false
