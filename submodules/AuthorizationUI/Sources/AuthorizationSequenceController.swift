@@ -1112,7 +1112,7 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
     
     /// The stock login: `auth.sendCode` for the number.
     fileprivate func telesrvSendCode(number: String, syncContacts: Bool, controller phoneController: AuthorizationSequencePhoneEntryController?) {
-        weak var controller = phoneController
+        weak let controller = phoneController
         controller?.inProgress = true
 
         let disableAuthTokens = self.sharedContext.immediateExperimentalUISettings.disableReloginTokens
@@ -1637,7 +1637,7 @@ extension AuthorizationSequenceController {
     /// The phone number page's Next: password login when the server offers it, else a login code.
     /// The first Next of a session waits for the server's switches.
     fileprivate func telesrvRouteLogin(number: String, syncContacts: Bool, phoneController: AuthorizationSequencePhoneEntryController?) {
-        weak var phoneController = phoneController
+        weak let phoneController = phoneController
         let _ = (self.telesrvLoginConfigurationPromise.get()
         |> take(1)
         |> deliverOnMainQueue).startStandalone(next: { [weak self] configuration in
@@ -1654,7 +1654,7 @@ extension AuthorizationSequenceController {
 
     /// `CODE_LOGIN_DISABLED` from a code request: the cached switches were stale.
     fileprivate func telesrvCodeLoginWasRefused(number: String, syncContacts: Bool, phoneController: AuthorizationSequencePhoneEntryController?) {
-        weak var phoneController = phoneController
+        weak let phoneController = phoneController
         let signUpDisabled = self.telesrvLoginConfiguration?.signUpDisabled ?? false
         let configuration = TelesrvLoginConfiguration(passwordLogin: true, codeLoginDisabled: true, signUpDisabled: signUpDisabled)
         self.telesrvLoginConfiguration = configuration
@@ -1665,7 +1665,7 @@ extension AuthorizationSequenceController {
     }
 
     fileprivate func telesrvBeginPasswordLogin(number: String, syncContacts: Bool, configuration: TelesrvLoginConfiguration, phoneController: AuthorizationSequencePhoneEntryController?) {
-        weak var phoneController = phoneController
+        weak let phoneController = phoneController
         phoneController?.inProgress = true
         self.actionDisposable.set((telesrvBeginLoginPassword(account: self.account, phoneNumber: number, syncContacts: syncContacts)
         |> deliverOnMainQueue).startStrict(next: { _ in
