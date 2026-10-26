@@ -270,7 +270,7 @@ public extension WalletContext {
             return .single(recipient)
         }
         let lowercaseValue = value.lowercased()
-        guard (lowercaseValue.hasSuffix(".ton") || lowercaseValue.hasSuffix(".t.me")),
+        guard (lowercaseValue.hasSuffix(".ton") || lowercaseValue.hasSuffix(".\(telesrvLinkHost)")),
               !value.unicodeScalars.contains(where: CharacterSet.whitespacesAndNewlines.contains) else {
             return .single(nil)
         }

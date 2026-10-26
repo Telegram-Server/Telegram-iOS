@@ -1734,7 +1734,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             guard !url.isEmpty else {
                 return
             }
-            context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: url, forceExternal: !url.hasPrefix("tg://") && !url.contains("?start="), presentationData: context.sharedContext.currentPresentationData.with({$0}), navigationController: self.navigationController as? NavigationController, dismissInput: {})
+            context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: url, forceExternal: !isTelesrvAppSchemeUrl(url) && !url.contains("?start="), presentationData: context.sharedContext.currentPresentationData.with({$0}), navigationController: self.navigationController as? NavigationController, dismissInput: {})
         }
         
         self.chatListDisplayNode.requestOpenMessageFromSearch = { [weak self] peer, threadId, messageId, deactivateOnAction in

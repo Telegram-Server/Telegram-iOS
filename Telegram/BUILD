@@ -58,6 +58,7 @@ load(
     "telegram_team_id",
     "telegram_enable_icloud",
     "telegram_enable_siri",
+    "telegram_app_specific_url_scheme",
 )
 
 load("@build_bazel_rules_apple//apple:resources.bzl",
@@ -430,25 +431,13 @@ plist_fragment(
             <string>{telegram_bundle_id}</string>
             <key>CFBundleURLSchemes</key>
             <array>
-                <string>telegram</string>
-            </array>
-        </dict>
-        <dict>
-            <key>CFBundleTypeRole</key>
-            <string>Viewer</string>
-            <key>CFBundleURLName</key>
-            <string>{telegram_bundle_id}.compatibility</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>tg</string>
-                <string>tonsite</string>
-                <string>ton</string>
-                <string>tc</string>
+                <string>{telegram_app_specific_url_scheme}</string>
             </array>
         </dict>
     </array>
     """.format(
         telegram_bundle_id = telegram_bundle_id,
+        telegram_app_specific_url_scheme = telegram_app_specific_url_scheme,
     )
 )
 
@@ -526,7 +515,20 @@ icloud_fragment = "" if not telegram_enable_icloud else """
     telegram_icloud_environment="Production" if telegram_aps_environment == "production" else "Development"
 )
 
-associated_domains_fragment = "" if telegram_bundle_id not in official_bundle_ids else """
+# The self-hosted build's universal links are on the server's public link host (TelegramCore's
+# telesrvLinkHost); darkmoon.cc must serve an apple-app-site-association naming this app.
+darkmoon_bundle_ids = [
+    "cc.darkmoon",
+]
+
+associated_domains_fragment = """
+<key>com.apple.developer.associated-domains</key>
+<array>
+    <string>applinks:darkmoon.cc</string>
+    <string>applinks:*.darkmoon.cc</string>
+    <string>webcredentials:darkmoon.cc</string>
+</array>
+""" if telegram_bundle_id in darkmoon_bundle_ids else ("" if telegram_bundle_id not in official_bundle_ids else """
 <key>com.apple.developer.associated-domains</key>
 <array>
     <string>applinks:telegram.me</string>
@@ -535,7 +537,7 @@ associated_domains_fragment = "" if telegram_bundle_id not in official_bundle_id
     <string>webcredentials:t.me</string>
     <string>webcredentials:telegram.org</string>
 </array>
-"""
+""")
 
 siri_fragment = "" if not telegram_enable_siri else """
 <key>com.apple.developer.siri</key>
@@ -563,7 +565,7 @@ official_communication_notifications_fragment = """
 <key>com.apple.developer.usernotifications.communication</key>
 <true/>
 """
-communication_notifications_fragment = official_communication_notifications_fragment if telegram_bundle_id in official_bundle_ids else ""
+communication_notifications_fragment = official_communication_notifications_fragment if telegram_bundle_id in official_bundle_ids + darkmoon_bundle_ids else ""
 
 official_notification_filtering_fragment = """
 <key>com.apple.developer.usernotifications.filtering</key>

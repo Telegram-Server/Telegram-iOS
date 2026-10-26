@@ -1513,7 +1513,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     shareStory(gift)
                 }
             }
-            let link = "https://t.me/nft/\(gift.slug)"
+            let link = "https://\(telesrvLinkHost)/nft/\(gift.slug)"
             let shareController = self.context.sharedContext.makeShareScreen(
                 context: self.context,
                 params: ShareControllerParams(
@@ -2161,7 +2161,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 return
             }
             
-            let link = "https://t.me/nft/\(gift.slug)"
+            let link = "https://\(telesrvLinkHost)/nft/\(gift.slug)"
             
             let _ = (self.context.engine.data.get(
                 TelegramEngine.EngineData.Item.Peer.Peer(id: arguments.peerId ?? context.account.peerId)

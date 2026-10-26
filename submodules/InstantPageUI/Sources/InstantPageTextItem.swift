@@ -1179,7 +1179,7 @@ private func attributedStringForRichTextContent(_ text: RichText, styleStack: In
             styleStack.pop()
             return result
         case let .textTonAddress(text):
-            var components = URLComponents(string: "https://t.me/sendgrams")!
+            var components = URLComponents(string: "https://\(telesrvLinkHost)/sendgrams")!
             components.queryItems = [URLQueryItem(name: "to", value: text.plainText)]
             styleStack.push(.link(false))
             let result = attributedStringForRichText(text, styleStack: styleStack, url: InstantPageUrlItem(url: components.string!, webpageId: nil), inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate, quoteSource: quoteSource)

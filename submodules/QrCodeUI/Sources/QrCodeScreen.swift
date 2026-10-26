@@ -484,14 +484,14 @@ public final class QrCodeScreen: ViewControllerComponentContainer {
         var link: String {
             switch self {
             case let .peer(peer):
-                return "https://t.me/\(peer.addressName ?? "")"
+                return "https://\(telesrvLinkHost)/\(peer.addressName ?? "")"
             case let .invite(invite, _):
                 return invite.link ?? ""
             case let .chatFolder(slug):
                 if slug.hasPrefix("https://") {
                     return slug
                 } else {
-                    return "https://t.me/addlist/\(slug)"
+                    return "https://\(telesrvLinkHost)/addlist/\(slug)"
                 }
             case let .proxy(server, externalLink):
                 var link: String
@@ -499,10 +499,10 @@ public final class QrCodeScreen: ViewControllerComponentContainer {
                 switch server.connection {
                 case let .mtp(secret):
                     let secret = MTProxySecret.parseData(secret)?.serializeToString() ?? ""
-                    link = "\(externalLink ? "https://t.me/proxy" : "tg://proxy")?server=\(serverHost)&port=\(server.port)"
+                    link = "\(externalLink ? "https://\(telesrvLinkHost)/proxy" : "\(telesrvUrlScheme)://proxy")?server=\(serverHost)&port=\(server.port)"
                     link += "&secret=\(secret.addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryValueAllowed) ?? "")"
                 case let .socks5(username, password):
-                    link = "\(externalLink ? "https://t.me/socks" : "tg://socks")?server=\(serverHost)&port=\(server.port)"
+                    link = "\(externalLink ? "https://\(telesrvLinkHost)/socks" : "\(telesrvUrlScheme)://socks")?server=\(serverHost)&port=\(server.port)"
                     if let username, !username.isEmpty {
                         link += "&user=\(username.addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryValueAllowed) ?? "")"
                     }

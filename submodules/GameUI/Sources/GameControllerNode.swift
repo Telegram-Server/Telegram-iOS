@@ -173,7 +173,7 @@ final class GameControllerNode: ViewControllerTracingNode {
     
     func shareWithoutScore() {
         if let (botPeer, gameName) = self.shareData(), let addressName = botPeer.addressName, !addressName.isEmpty, !gameName.isEmpty {
-            let url = "https://t.me/\(addressName)?game=\(gameName)"
+            let url = "https://\(telesrvLinkHost)/\(addressName)?game=\(gameName)"
             
             let context = self.context
             let shareController = context.sharedContext.makeShareScreen(context: context, params: ShareControllerParams(subject: .url(url), showInChat: nil, externalShare: true, actionCompleted: { [weak self] in

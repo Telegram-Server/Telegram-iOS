@@ -1,9 +1,10 @@
 import Foundation
 import UrlEscaping
 
+// "darkmoon.cc" is TelegramCore's `telesrvLinkHost`, spelled out because this module (and its
+// host test) depends on nothing but Foundation and UrlEscaping.
 private let whitelistedHosts: Set<String> = Set([
-    "t.me",
-    "telegram.me",
+    "darkmoon.cc",
     "telegra.ph",
     "telesco.pe",
     "fragment.com"

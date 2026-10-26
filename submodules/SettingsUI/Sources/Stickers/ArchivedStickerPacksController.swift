@@ -560,7 +560,7 @@ public func archivedStickerPacksController(context: AccountContext, mode: Archiv
                             packNames.append(entry.info.shortName)
                         }
                     }
-                    let text = packNames.map { "https://t.me/addstickers/\($0)" }.joined(separator: "\n")
+                    let text = packNames.map { "https://\(telesrvLinkHost)/addstickers/\($0)" }.joined(separator: "\n")
                     let shareController = context.sharedContext.makeShareScreen(context: context, params: ShareControllerParams(subject: .text(text), externalShare: true))
                     presentControllerImpl?(shareController, nil)
                 })])

@@ -5,8 +5,7 @@ import Emoji
 
 private let whitelistedHosts: Set<String> = Set([
     "telegram.org",
-    "t.me",
-    "telegram.me",
+    telesrvLinkHost,
     "telegra.ph",
     "telesco.pe",
     "fragment.com"

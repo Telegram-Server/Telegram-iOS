@@ -333,7 +333,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             
             var link = ""
             if case let .generic(gift) = self.auctionContext.gift, let slug = gift.auctionSlug {
-                link = "https://t.me/auction/\(slug)"
+                link = "https://\(telesrvLinkHost)/auction/\(slug)"
             }
             
             let shareController = self.context.sharedContext.makeShareScreen(
@@ -438,7 +438,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             
             var link = ""
             if case let .generic(gift) = gift, let slug = gift.auctionSlug {
-                link = "https://t.me/auction/\(slug)"
+                link = "https://\(telesrvLinkHost)/auction/\(slug)"
             }
             
             var items: [ContextMenuItem] = []

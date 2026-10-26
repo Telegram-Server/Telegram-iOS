@@ -225,7 +225,7 @@ private func makeInternalUrlHandler(
 }
 
 private let internetSchemes: [String] = ["http", "https"]
-private let telegramMeHosts: [String] = ["t.me", "telegram.me", "telegram.dog"]
+private let telegramMeHosts: [String] = [telesrvLinkHost]
 
 private func handleInternetUrl(
     parsedUrl: URL,
@@ -353,7 +353,7 @@ private func appendQueryItems(to base: String, items: [URLQueryItem]) -> String 
 }
 
 private func makeTelegramUrl(_ path: String, queryItems: [URLQueryItem] = []) -> String {
-    return appendQueryItems(to: "https://t.me\(path)", items: queryItems)
+    return appendQueryItems(to: "https://\(telesrvLinkHost)\(path)", items: queryItems)
 }
 
 func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, url: String, forceExternal: Bool, presentationData: PresentationData, navigationController: NavigationController?, dismissInput: @escaping () -> Void) {
@@ -442,7 +442,7 @@ private func openCheckedExternalUrl(context: AccountContext, urlContext: OpenURL
     )
     
     let continueHandling: () -> Void = {
-        if let scheme = parsedUrl.scheme, (scheme == "tg" || scheme == context.sharedContext.applicationBindings.appSpecificScheme) {
+        if let scheme = parsedUrl.scheme, (scheme == "tg" || scheme == telesrvUrlScheme || scheme == context.sharedContext.applicationBindings.appSpecificScheme) {
             if parsedUrl.host == "tonsite" {
                 if let value = URL(string: "tonsite:/" + parsedUrl.path) {
                     parsedUrl = value
@@ -450,7 +450,7 @@ private func openCheckedExternalUrl(context: AccountContext, urlContext: OpenURL
             }
         }
         
-        if let scheme = parsedUrl.scheme, (scheme == "tg" || scheme == context.sharedContext.applicationBindings.appSpecificScheme) {
+        if let scheme = parsedUrl.scheme, (scheme == "tg" || scheme == telesrvUrlScheme || scheme == context.sharedContext.applicationBindings.appSpecificScheme) {
             var convertedUrl: String?
             let host = parsedUrl.host?.lowercased() ?? ""
             if host == "debug", parsedUrl.path == "/crash_reports" {
@@ -462,7 +462,7 @@ private func openCheckedExternalUrl(context: AccountContext, urlContext: OpenURL
                       let components = URLComponents(url: parsedUrl, resolvingAgainstBaseURL: false) else {
                     return
                 }
-                handleInternalUrl("https://t.me/sendgrams" + (components.percentEncodedQuery.map { "?" + $0 } ?? ""))
+                handleInternalUrl("https://\(telesrvLinkHost)/sendgrams" + (components.percentEncodedQuery.map { "?" + $0 } ?? ""))
                 return
             }
             if let query = parsedUrl.query, let params = QueryParameters(query) {

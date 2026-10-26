@@ -9,20 +9,18 @@ import TelegramNotices
 import AccountContext
 import WalletContext
 
+// The server's public link host replaces t.me, telegram.me and telegram.dog: those are links to
+// Telegram's own network and open as external links.
 private let baseTelegramMePaths = [
-    "telegram.me",
-    "t.me", "telegram.dog"
+    telesrvLinkHost
 ]
-private let telegramWebShortLinkHosts = [
-    "a.t.me", 
-    "k.t.me",
-    "z.t.me"
-]
+// Telegram Web's short-link hosts (a.t.me, k.t.me, z.t.me) have no counterpart on the server.
+private let telegramWebShortLinkHosts: [String] = []
 private let baseTelegraPhPaths = [
     "telegra.ph/",
     "te.legra.ph/",
     "graph.org/",
-    "t.me/iv?",
+    "\(telesrvLinkHost)/iv?",
     "telegram.org/blog/",
     "telegram.org/tour/"
 ]
@@ -282,7 +280,7 @@ public func parseInternalUrl(sharedContext: SharedAccountContext, context: Accou
                             }
                         }
                         if let _ = url {
-                            return .internalInstantView(url: "https://t.me/\(query)")
+                            return .internalInstantView(url: "https://\(telesrvLinkHost)/\(query)")
                         }
                     } else if peerName == "contact" {
                         var code: String?
@@ -344,7 +342,7 @@ public func parseInternalUrl(sharedContext: SharedAccountContext, context: Accou
                             }
                         }
                         if let _ = token {
-                            return .oauth(url: "https://t.me/\(query)")
+                            return .oauth(url: "https://\(telesrvLinkHost)/\(query)")
                         }
                     } else {
                         if let value = queryItems.first(where: { $0.name == "free" })?.value, !value.isEmpty {
@@ -914,7 +912,7 @@ private func resolveInternalUrl(context: AccountContext, url: ParsedInternalUrl)
         case let .premiumOffer(reference):
             return .single(.result(.premiumOffer(reference: reference)))
         case let .sendGrams(queryItems):
-            var walletUrl = URLComponents(string: "https://t.me/sendgrams")!
+            var walletUrl = URLComponents(string: "https://\(telesrvLinkHost)/sendgrams")!
             walletUrl.queryItems = queryItems
             walletUrl.percentEncodedQuery = walletUrl.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
             if let value = walletUrl.string, WalletContext.isTonConnectUrl(value) {
@@ -1549,7 +1547,7 @@ public func parseProxyUrl(sharedContext: SharedAccountContext, url: String) -> (
             }
         }
     }
-    if let parsedUrl = URL(string: url), parsedUrl.scheme == "tg", let host = parsedUrl.host, let query = parsedUrl.query {
+    if let parsedUrl = URL(string: telesrvInternalUrl(url)), parsedUrl.scheme == "tg", let host = parsedUrl.host, let query = parsedUrl.query {
         if let internalUrl = parseInternalUrl(sharedContext: sharedContext, context: nil, query: host + "?" + query), case let .proxy(host, port, username, password, secret) = internalUrl {
             return (host, port, username, password, secret)
         }
@@ -1570,7 +1568,7 @@ public func parseStickerPackUrl(sharedContext: SharedAccountContext, url: String
             }
         }
     }
-    if let parsedUrl = URL(string: url), parsedUrl.scheme == "tg", let host = parsedUrl.host, let query = parsedUrl.query {
+    if let parsedUrl = URL(string: telesrvInternalUrl(url)), parsedUrl.scheme == "tg", let host = parsedUrl.host, let query = parsedUrl.query {
         if let internalUrl = parseInternalUrl(sharedContext: sharedContext, context: nil, query: host + "?" + query), case let .stickerPack(name, _) = internalUrl {
             return name
         }
@@ -1591,7 +1589,7 @@ public func parseWallpaperUrl(sharedContext: SharedAccountContext, url: String) 
             }
         }
     }
-    if let parsedUrl = URL(string: url), parsedUrl.scheme == "tg", let host = parsedUrl.host, let query = parsedUrl.query {
+    if let parsedUrl = URL(string: telesrvInternalUrl(url)), parsedUrl.scheme == "tg", let host = parsedUrl.host, let query = parsedUrl.query {
         if let internalUrl = parseInternalUrl(sharedContext: sharedContext, context: nil, query: host + "?" + query), case let .wallpaper(wallpaper) = internalUrl {
             return wallpaper
         }
@@ -1612,7 +1610,7 @@ public func parseAdUrl(sharedContext: SharedAccountContext, context: AccountCont
             }
         }
     }
-    if let parsedUrl = URL(string: url), parsedUrl.scheme == "tg", let host = parsedUrl.host, let query = parsedUrl.query {
+    if let parsedUrl = URL(string: telesrvInternalUrl(url)), parsedUrl.scheme == "tg", let host = parsedUrl.host, let query = parsedUrl.query {
         if let internalUrl = parseInternalUrl(sharedContext: sharedContext, context: context, query: host + "?" + query), case .peer = internalUrl {
             return internalUrl
         }
@@ -1702,6 +1700,15 @@ public func resolveUrlImpl(context: AccountContext, peerId: EnginePeer.Id?, url:
             
             if isTelegramWebShortLink(url) {
                 return .single(.result(.externalUrl(url)))
+            }
+
+            // www.<link host> is the link host itself, not the subdomain of a username.
+            for scheme in ["http://", "https://"] {
+                let wwwPrefix = scheme + "www." + telesrvLinkHost
+                if url.lowercased().hasPrefix(wwwPrefix) {
+                    url = scheme + telesrvLinkHost + String(url.dropFirst(wwwPrefix.count))
+                    break
+                }
             }
 
             for basePath in baseTelegramMePaths {

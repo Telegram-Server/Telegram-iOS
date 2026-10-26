@@ -5566,7 +5566,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             guard let self else {
                 return
             }
-            self.openUrl("https://t.me/nft/\(slug)", concealed: false)
+            self.openUrl("https://\(telesrvLinkHost)/nft/\(slug)", concealed: false)
         }, openMessageFeeException: { [weak self] in
             guard let self, let peer = self.presentationInterfaceState.renderedPeer?.peer.flatMap(EnginePeer.init) else {
                 return

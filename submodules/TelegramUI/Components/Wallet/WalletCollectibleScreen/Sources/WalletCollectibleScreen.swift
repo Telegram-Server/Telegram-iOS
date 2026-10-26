@@ -76,8 +76,8 @@ private func walletCollectibleFragmentUrl(collectible: WalletContext.Collectible
         var username = collectible.name
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "@"))
-        if username.lowercased().hasSuffix(".t.me") {
-            username.removeLast(".t.me".count)
+        if username.lowercased().hasSuffix(".\(telesrvLinkHost)") {
+            username.removeLast(".\(telesrvLinkHost)".count)
         }
         value = username
     case .anonymousNumber:
@@ -865,7 +865,7 @@ private final class WalletCollectibleContentComponent: Component {
             )
             var items: [ContextMenuItem] = []
             if component.collectible.kind == .gift, let slug = component.collectible.giftSlug {
-                let link = "https://t.me/nft/\(slug)"
+                let link = "https://\(telesrvLinkHost)/nft/\(slug)"
                 items.append(.action(ContextMenuActionItem(
                     text: environment.strings.Gift_View_Context_CopyLink,
                     icon: { theme in

@@ -2621,7 +2621,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     }
     
     func handleOpenURL(_ url: URL) {
-        guard self.openUrlInProgress != url else {
+        guard self.openUrlInProgress != telesrvInternalUrl(url) else {
             return
         }
         self.openUrl(url: url)
@@ -2633,6 +2633,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     }
 
     private func openUrl(url: URL) {
+        // dm:// is this app's scheme; the link handling below understands its tg:// form.
+        let url = telesrvInternalUrl(url)
         let _ = (self.sharedContextPromise.get()
         |> take(1)
         |> mapToSignal { sharedApplicationContext -> Signal<(SharedAccountContextImpl, AuthorizedApplicationContext?, UnauthorizedApplicationContext?), NoError> in
@@ -3000,6 +3002,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
 
     private var openUrlInProgress: URL?
     private func openUrlWhenReady(accountId: AccountRecordId? = nil, url: URL, external: Bool = false) {
+        // dm:// is this app's scheme; the link handling below understands its tg:// form.
+        let url = telesrvInternalUrl(url)
         self.openUrlInProgress = url
         
         let signal = self.sharedContextPromise.get()

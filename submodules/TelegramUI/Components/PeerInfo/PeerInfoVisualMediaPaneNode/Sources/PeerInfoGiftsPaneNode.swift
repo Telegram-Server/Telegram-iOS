@@ -538,7 +538,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                 }
                 f(.default)
                 
-                self.openShareLink?("https://t.me/\(addressName)/c/\(id)")
+                self.openShareLink?("https://\(telesrvLinkHost)/\(addressName)/c/\(id)")
             })))
         }
         
@@ -1183,7 +1183,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
         }
         
         if case let .unique(gift) = gift.gift {
-            let link = "https://t.me/nft/\(gift.slug)"
+            let link = "https://\(telesrvLinkHost)/nft/\(gift.slug)"
             
             items.append(.action(ContextMenuActionItem(text: strings.PeerInfo_Gifts_Context_CopyLink, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Link"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, f in
                 c?.dismiss(completion: { [weak self] in

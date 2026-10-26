@@ -1101,7 +1101,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 query = recipient.transferInput
             } else {
                 let lowercaseValue = value.lowercased()
-                guard (lowercaseValue.hasSuffix(".ton") || lowercaseValue.hasSuffix(".t.me"))
+                guard (lowercaseValue.hasSuffix(".ton") || lowercaseValue.hasSuffix(".\(telesrvLinkHost)"))
                     && !value.unicodeScalars.contains(where: CharacterSet.whitespacesAndNewlines.contains) else {
                     self.presentInvalidPasteToast()
                     return
