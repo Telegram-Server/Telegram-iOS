@@ -383,7 +383,7 @@ final class ShareSearchContainerNode: ASDisplayNode, ShareContentContainerNode {
                     
                     for renderedPeer in foundLocalPeers {
                         if let peer = renderedPeer.peers[renderedPeer.peerId], peer.id != accountPeer.id {
-                            if !existingPeerIds.contains(renderedPeer.peerId) && canSendMessagesToPeer(peer) {
+                            if !existingPeerIds.contains(renderedPeer.peerId) && context.telesrvCanSendMessagesToPeer(peer) {
                                 existingPeerIds.insert(renderedPeer.peerId)
                                 entries.append(ShareSearchPeerEntry(index: index, peer: renderedPeer, presence: nil, requiresPremiumForMessaging: peerRequiresPremiumForMessaging[peer.id] ?? false, requiresStars: nil, theme: theme, strings: strings, isGlobal: false))
                                 index += 1
@@ -401,7 +401,7 @@ final class ShareSearchContainerNode: ASDisplayNode, ShareContentContainerNode {
                     } else {
                         for foundPeer in foundRemotePeers.0 {
                             let peer = foundPeer.peer
-                            if !existingPeerIds.contains(peer.id) && canSendMessagesToPeer(peer) {
+                            if !existingPeerIds.contains(peer.id) && context.telesrvCanSendMessagesToPeer(peer) {
                                 existingPeerIds.insert(peer.id)
                                 entries.append(ShareSearchPeerEntry(index: index, peer: EngineRenderedPeer(peer: foundPeer.peer), presence: nil, requiresPremiumForMessaging: peerRequiresPremiumForMessaging[peer.id] ?? false, requiresStars: nil, theme: theme, strings: strings, isGlobal: false))
                                 index += 1
@@ -410,7 +410,7 @@ final class ShareSearchContainerNode: ASDisplayNode, ShareContentContainerNode {
 
                         for foundPeer in foundRemotePeers.1 {
                             let peer = foundPeer.peer
-                            if !existingPeerIds.contains(peer.id) && canSendMessagesToPeer(peer) {
+                            if !existingPeerIds.contains(peer.id) && context.telesrvCanSendMessagesToPeer(peer) {
                                 existingPeerIds.insert(peer.id)
                                 entries.append(ShareSearchPeerEntry(index: index, peer: EngineRenderedPeer(peer: peer), presence: nil, requiresPremiumForMessaging: peerRequiresPremiumForMessaging[peer.id] ?? false, requiresStars: nil, theme: theme, strings: strings, isGlobal: true))
                                 index += 1
@@ -476,7 +476,7 @@ final class ShareSearchContainerNode: ASDisplayNode, ShareContentContainerNode {
             }
             var index = 0
             for (peer, requiresPremiumForMessaging) in recentPeerList {
-                if let mainPeer = peer.peers[peer.peerId], canSendMessagesToPeer(mainPeer) {
+                if let mainPeer = peer.peers[peer.peerId], context.telesrvCanSendMessagesToPeer(mainPeer) {
                     recentItemList.append(.peer(index: index, theme: theme, peer: mainPeer, associatedPeer: mainPeer.associatedPeerId.flatMap { peer.peers[$0] }, presence: nil, requiresPremiumForMessaging: requiresPremiumForMessaging, requiresStars: nil, strings: strings))
                     index += 1
                 }

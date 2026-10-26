@@ -219,7 +219,7 @@ private func communitySelectionPeerMatchesRequestTypes(peer: EnginePeer, request
     return false
 }
 
-private func communitySelectionPeerState(peer: EnginePeer, isJoined: Bool, options: CommunityPeerSelectionOptions) -> (isVisible: Bool, isEnabled: Bool, disabledReason: ChatListDisabledPeerReason) {
+private func communitySelectionPeerState(context: AccountContext, peer: EnginePeer, isJoined: Bool, options: CommunityPeerSelectionOptions) -> (isVisible: Bool, isEnabled: Bool, disabledReason: ChatListDisabledPeerReason) {
     let filter = options.filter
 
     if options.excludedPeerIds.contains(peer.id) {
@@ -297,7 +297,7 @@ private func communitySelectionPeerState(peer: EnginePeer, isJoined: Bool, optio
     }
 
     var enabled = true
-    if filter.contains(.onlyWriteable), !canSendMessagesToPeer(peer) {
+    if filter.contains(.onlyWriteable), !context.telesrvCanSendMessagesToPeer(peer) {
         enabled = false
     }
 
@@ -1242,7 +1242,7 @@ private final class CommunityViewContentComponent: Component {
                 let botHasPreview = isBot && self.botHasPreview(peerId: peer.id, component: component)
                 
                 if let selectionOptions = component.selectionOptions {
-                    let selectionState = communitySelectionPeerState(peer: peer, isJoined: isJoined, options: selectionOptions)
+                    let selectionState = communitySelectionPeerState(context: component.context, peer: peer, isJoined: isJoined, options: selectionOptions)
                     if !selectionState.isVisible {
                         continue
                     }
@@ -1396,7 +1396,7 @@ private final class CommunityViewContentComponent: Component {
                 let row = rows[index]
                 if let selectionOptions = component.selectionOptions {
                     let isJoined = component.joinedPeerIds.contains(row.peer.id)
-                    let selectionState = communitySelectionPeerState(peer: row.peer, isJoined: isJoined, options: selectionOptions)
+                    let selectionState = communitySelectionPeerState(context: component.context, peer: row.peer, isJoined: isJoined, options: selectionOptions)
                     guard selectionState.isVisible else {
                         continue
                     }
@@ -2392,7 +2392,7 @@ private final class CommunityViewScreenComponent: Component {
                 }
 
                 if let selectionOptions = component.selectionOptions {
-                    let selectionState = communitySelectionPeerState(peer: actualPeer, isJoined: self.joinedPeerIds.contains(actualPeer.id), options: selectionOptions)
+                    let selectionState = communitySelectionPeerState(context: component.context, peer: actualPeer, isJoined: self.joinedPeerIds.contains(actualPeer.id), options: selectionOptions)
                     if selectionState.isVisible {
                         if selectionState.isEnabled {
                             self.dismiss(animated: false)

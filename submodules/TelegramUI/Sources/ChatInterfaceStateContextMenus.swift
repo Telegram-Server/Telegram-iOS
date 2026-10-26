@@ -2524,7 +2524,7 @@ func chatChannelAuthorIsBannable(authorId: EnginePeer.Id, chatPeerId: EnginePeer
 }
 
 func chatAvailableMessageActionsImpl(engine: TelegramEngine, accountPeerId: EnginePeer.Id, messageIds: Set<EngineMessage.Id>, messages: [EngineMessage.Id: EngineRawMessage] = [:], peers: [EnginePeer.Id: EngineRawPeer] = [:], keepUpdated: Bool) -> Signal<ChatAvailableMessageActions, NoError> {
-    return engine.data.subscribe(
+    return combineLatest(engine.data.subscribe(
         TelegramEngine.EngineData.Item.Configuration.Limits(),
         EngineDataMap(Set(messageIds.map(\.peerId)).map(TelegramEngine.EngineData.Item.Peer.Peer.init)),
         EngineDataMap(Set(messageIds).map(TelegramEngine.EngineData.Item.Messages.Message.init)),
@@ -2532,9 +2532,14 @@ func chatAvailableMessageActionsImpl(engine: TelegramEngine, accountPeerId: Engi
         EngineDataMap(Set(messageIds.map(\.peerId)).map(TelegramEngine.EngineData.Item.Peer.MyCopyProtectionEnabled.init)),
         EngineDataMap(Set(messageIds.map(\.peerId)).map(TelegramEngine.EngineData.Item.Peer.LinkedDiscussionPeerId.init)),
         TelegramEngine.EngineData.Item.Peer.Peer(id: accountPeerId)
-    )
+    ), engine.data.subscribe(TelegramEngine.EngineData.Item.Configuration.App())
+    |> map { appConfiguration -> TelesrvPermissions in
+        return TelesrvPermissions.with(appConfiguration: appConfiguration)
+    }
+    |> distinctUntilChanged)
     |> take(keepUpdated ? Int.max : 1)
-    |> map { limitsConfiguration, peerMap, messageMap, copyProtectionMap, myCopyProtectionMap, linkedDiscussionPeerIdMap, accountPeer -> ChatAvailableMessageActions in
+    |> map { data, telesrvPermissions -> ChatAvailableMessageActions in
+        let (limitsConfiguration, peerMap, messageMap, copyProtectionMap, myCopyProtectionMap, linkedDiscussionPeerIdMap, accountPeer) = data
         let isPremium: Bool
         if let accountPeer {
             isPremium = accountPeer.isPremium
@@ -2832,6 +2837,16 @@ func chatAvailableMessageActionsImpl(engine: TelegramEngine, accountPeerId: Engi
             
             if !isShareProtected && !isExternalShareProtected {
                 optionsMap[id]!.insert(.externalShare)
+            }
+            
+            // telesrv staff permissions: deleting a message the chat has is refused. Messages that never
+            // reached it (sending, failed, scheduled, local) stay deletable.
+            if !telesrvPermissions.allows(.delete), id.namespace == Namespaces.Message.Cloud {
+                if let message = getMessage(id), message.flags.isSending || message.flags.contains(.Failed) {
+                } else {
+                    optionsMap[id]!.remove(.deleteLocally)
+                    optionsMap[id]!.remove(.deleteGlobally)
+                }
             }
         }
                 

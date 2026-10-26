@@ -6,6 +6,11 @@ import MtProtoKit
 
 func _internal_removePeerChat(account: Account, peerId: PeerId, reportChatSpam: Bool, deleteGloballyIfPossible: Bool = false) -> Signal<Void, NoError> {
     return account.postbox.transaction { transaction -> Void in
+        // telesrv staff permissions: deleting a private chat clears it and deleting a group or channel
+        // leaves it; the server refuses either only after the chat was removed here.
+        if let peer = transaction.getPeer(peerId), !telesrvCurrentPermissions(transaction: transaction).canDeleteChat(peer: EnginePeer(peer)) {
+            return
+        }
         _internal_removePeerChat(account: account, transaction: transaction, mediaBox: account.postbox.mediaBox, peerId: peerId, reportChatSpam: reportChatSpam, deleteGloballyIfPossible: deleteGloballyIfPossible)
     }
 }

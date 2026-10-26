@@ -2559,6 +2559,9 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
         if !canSendMessagesToPeer(peer) {
             return
         }
+        if self.telesrvSendIsRefused(view: view, peer: peer) {
+            return
+        }
 
         let sendMessage: (Int32?) -> Void = { [weak self, weak view] scheduleTime in
             guard let self, let view, let component = view.component else {
@@ -2851,8 +2854,25 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
         }
     }
 
+    /// telesrv staff permissions: a story reply to a chat the account may not send to is refused here,
+    /// with the reason.
+    private func telesrvSendIsRefused(view: StoryItemSetContainerComponent.View, peer: EnginePeer) -> Bool {
+        guard let component = view.component else {
+            return false
+        }
+        guard let restriction = component.context.telesrvPermissions.sendRestriction(peer: peer, accountPeerId: component.context.account.peerId) else {
+            return false
+        }
+        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkColorPresentationTheme)
+        component.controller()?.present(textAlertController(context: component.context, updatedPresentationData: (presentationData, .single(presentationData)), title: nil, text: restriction.text(strings: presentationData.strings), actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+        return true
+    }
+
     private func sendMessages(view: StoryItemSetContainerComponent.View, peer: EnginePeer, messages: [EnqueueMessage], silentPosting: Bool = false, scheduleTime: Int32? = nil) {
         guard let component = view.component else {
+            return
+        }
+        if self.telesrvSendIsRefused(view: view, peer: peer) {
             return
         }
         let _ = (enqueueMessages(account: component.context.account, peerId: peer.id, messages: self.transformEnqueueMessages(view: view, messages: messages, silentPosting: silentPosting, scheduleTime: scheduleTime))
@@ -2873,6 +2893,9 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
 
     private func enqueueMediaMessages(view: StoryItemSetContainerComponent.View, peer: EnginePeer, replyToMessageId: EngineMessage.Id?, replyToStoryId: EngineStoryId?, signals: [Any]?, silentPosting: Bool, scheduleTime: Int32? = nil, parameters: ChatSendMessageActionSheetController.SendParameters? = nil, getAnimatedTransitionSource: ((String) -> UIView?)? = nil, completion: @escaping () -> Void = {}) {
         guard let component = view.component else {
+            return
+        }
+        if self.telesrvSendIsRefused(view: view, peer: peer) {
             return
         }
 
@@ -3371,7 +3394,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
             return
         }
         let context = component.context
-        let presentationData = context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkPresentationTheme)
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkColorPresentationTheme)
         let progressSignal = Signal<Never, NoError> { [weak parentController, weak self, weak view] subscriber in
             let progressController = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: nil))
             parentController?.present(progressController, in: .window(.root), with: nil)
@@ -3452,7 +3475,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
             if let activeUntilTimestamp = config.stealthModeState.actualizedNow().activeUntilTimestamp, activeUntilTimestamp > timestamp {
                 let remainingActiveSeconds = activeUntilTimestamp - timestamp
 
-                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkPresentationTheme)
+                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkColorPresentationTheme)
                 let text = component.strings.Story_ToastStealthModeActiveText(timeIntervalString(strings: presentationData.strings, value: remainingActiveSeconds)).string
                 let tooltipScreen = UndoOverlayController(
                     presentationData: presentationData,
@@ -3479,7 +3502,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                     let timestamp = Int32(Date().timeIntervalSince1970)
                     let remainingActiveSeconds = max(1, activeUntilTimestamp - timestamp)
 
-                    let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkPresentationTheme)
+                    let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkColorPresentationTheme)
                     let text = component.strings.Story_ToastStealthModeActiveText(timeIntervalString(strings: presentationData.strings, value: remainingActiveSeconds)).string
                     tooltipScreenValue.content = .actionSucceeded(title: component.strings.Story_ToastStealthModeActiveTitle, text: text, cancel: "", destructive: false)
                 })
@@ -3520,7 +3543,7 @@ final class StoryItemSetContainerSendMessage: @unchecked(Sendable) {
                             return
                         }
 
-                        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkPresentationTheme)
+                        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkColorPresentationTheme)
                         let text = component.strings.Story_ToastStealthModeActivatedText(timeIntervalString(strings: presentationData.strings, value: pastPeriod), timeIntervalString(strings: presentationData.strings, value: futurePeriod)).string
                         let tooltipScreen = UndoOverlayController(
                             presentationData: presentationData,

@@ -330,6 +330,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     let controllerNavigationDisposable = MetaDisposable()
     let sentMessageEventsDisposable = MetaDisposable()
     let failedMessageEventsDisposable = MetaDisposable()
+    let telesrvPermissionsDisposable = MetaDisposable()
     let sentPeerMediaMessageEventsDisposable = MetaDisposable()
     weak var currentFailedMessagesAlertController: ViewController?
     let messageActionCallbackDisposable = MetaDisposable()
@@ -7100,6 +7101,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.controllerNavigationDisposable.dispose()
         self.sentMessageEventsDisposable.dispose()
         self.failedMessageEventsDisposable.dispose()
+        self.telesrvPermissionsDisposable.dispose()
         self.sentPeerMediaMessageEventsDisposable.dispose()
         self.messageActionCallbackDisposable.dispose()
         self.messageActionUrlAuthDisposable.dispose()
@@ -9188,6 +9190,13 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     func sendMessages(_ messages: [EnqueueMessage], media: Bool = false, postpone: Bool = false, commit: Bool = false) {
         if case let .customChatContents(customChatContents) = self.subject {
             customChatContents.enqueueMessages(messages: messages)
+            return
+        }
+        
+        // telesrv staff permissions: the last guard of every send from this chat (input field, media,
+        // stickers, forwards into it).
+        if let restriction = telesrvSendRestriction(context: self.context, state: self.presentationInterfaceState) {
+            self.present(textAlertController(context: self.context, title: nil, text: restriction.text(strings: self.presentationData.strings), actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
             return
         }
         

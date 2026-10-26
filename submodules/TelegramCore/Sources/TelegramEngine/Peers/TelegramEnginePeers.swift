@@ -657,7 +657,12 @@ public extension TelegramEngine {
 
         public func removePeerChats(peerIds: [PeerId], deleteGloballyIfPossible: Bool = false) -> Signal<Never, NoError> {
             return self.account.postbox.transaction { transaction -> Void in
+                let telesrvPermissions = telesrvCurrentPermissions(transaction: transaction)
                 for peerId in peerIds {
+                    // telesrv staff permissions, as in `_internal_removePeerChat(account:peerId:)`.
+                    if let peer = transaction.getPeer(peerId), !telesrvPermissions.canDeleteChat(peer: EnginePeer(peer)) {
+                        continue
+                    }
                     _internal_removePeerChat(account: self.account, transaction: transaction, mediaBox: self.account.postbox.mediaBox, peerId: peerId, reportChatSpam: false, deleteGloballyIfPossible: peerId.namespace == Namespaces.Peer.SecretChat || deleteGloballyIfPossible)
                 }
             }

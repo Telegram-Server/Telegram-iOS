@@ -173,9 +173,9 @@ private enum ChatListRecentEntry: Comparable, Identifiable {
                 var enabled = true
                 if filter.contains(.onlyWriteable) {
                     if let peer = chatPeer {
-                        enabled = isIncludedCommunityContainer(peer, filter: filter) || canSendMessagesToPeer(peer)
+                        enabled = isIncludedCommunityContainer(peer, filter: filter) || context.telesrvCanSendMessagesToPeer(peer)
                     } else {
-                        enabled = isIncludedCommunityContainer(primaryPeer, filter: filter) || canSendMessagesToPeer(primaryPeer)
+                        enabled = isIncludedCommunityContainer(primaryPeer, filter: filter) || context.telesrvCanSendMessagesToPeer(primaryPeer)
                     }
                     if requiresPremiumForMessaging {
                         enabled = false
@@ -764,7 +764,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                 var enabled = true
                 if filter.contains(.onlyWriteable) {
                     if let peer = chatPeer {
-                        enabled = isIncludedCommunityContainer(peer, filter: filter) || canSendMessagesToPeer(peer)
+                        enabled = isIncludedCommunityContainer(peer, filter: filter) || context.telesrvCanSendMessagesToPeer(peer)
                     } else {
                         enabled = false
                     }
@@ -904,7 +904,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                 var enabled = true
                 if filter.contains(.onlyWriteable) {
                     if let peer = chatPeer {
-                        enabled = isIncludedCommunityContainer(peer, filter: filter) || canSendMessagesToPeer(peer)
+                        enabled = isIncludedCommunityContainer(peer, filter: filter) || context.telesrvCanSendMessagesToPeer(peer)
                     } else {
                         enabled = false
                     }
@@ -1028,7 +1028,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
             case let .globalPeer(peer, unreadBadge, _, theme, strings, nameSortOrder, nameDisplayOrder, expandType, storyStats, requiresPremiumForMessaging, query):
                 var enabled = true
                 if filter.contains(.onlyWriteable) {
-                    enabled = isIncludedCommunityContainer(peer.peer, filter: filter) || canSendMessagesToPeer(peer.peer)
+                    enabled = isIncludedCommunityContainer(peer.peer, filter: filter) || context.telesrvCanSendMessagesToPeer(peer.peer)
                     if requiresPremiumForMessaging {
                         enabled = false
                     }
@@ -1421,9 +1421,9 @@ private struct ChatListSearchListPaneNodeState: Equatable {
     var deletedGlobalMessageIds = Set<Int32>()
 }
 
-private func doesPeerMatchFilter(peer: EnginePeer, filter: ChatListNodePeersFilter) -> Bool {
+private func doesPeerMatchFilter(context: AccountContext, peer: EnginePeer, filter: ChatListNodePeersFilter) -> Bool {
     var enabled = true
-    if filter.contains(.onlyWriteable), !isIncludedCommunityContainer(peer, filter: filter) && !canSendMessagesToPeer(peer) {
+    if filter.contains(.onlyWriteable), !isIncludedCommunityContainer(peer, filter: filter) && !context.telesrvCanSendMessagesToPeer(peer) {
         enabled = false
     }
     if filter.contains(.onlyPrivateChats) {
@@ -2305,7 +2305,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                 if !peer.indexName.matchesByTokens(queryTokens) {
                                     continue
                                 }
-                                if peersFilter.contains(.onlyWriteable) && peersFilter.contains(.excludeDisabled) && !canSendMessagesToPeer(peer) {
+                                if peersFilter.contains(.onlyWriteable) && peersFilter.contains(.excludeDisabled) && !context.telesrvCanSendMessagesToPeer(peer) {
                                     continue
                                 }
 
@@ -4183,7 +4183,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                     if peerIds.contains(peer.id) {
                         continue loop
                     }
-                    if !doesPeerMatchFilter(peer: EnginePeer(peer), filter: peersFilter) {
+                    if !doesPeerMatchFilter(context: context, peer: EnginePeer(peer), filter: peersFilter) {
                         continue
                     }
                     peerIds.insert(peer.id)

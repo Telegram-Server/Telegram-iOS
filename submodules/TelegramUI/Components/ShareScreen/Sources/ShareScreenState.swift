@@ -252,7 +252,7 @@ final class ShareScreenState {
         |> deliverOnMainQueue).start(next: { [weak self] recent in
             guard let self else { return }
             if case let .peers(peers) = recent {
-                self.recommendations = peers.map(EnginePeer.init).filter { canSendMessagesToPeer($0) && $0.id != context.account.peerId }
+                self.recommendations = peers.map(EnginePeer.init).filter { context.telesrvCanSendMessagesToPeer($0) && $0.id != context.account.peerId }
             } else {
                 self.recommendations = []
             }
@@ -316,7 +316,7 @@ final class ShareScreenState {
             )
             |> map { peers, topMessages, counts in
                 let joinedPeers = ids.compactMap { peers[$0] ?? nil }.filter { peer in
-                    guard canSendMessagesToPeer(peer) else { return false }
+                    guard self.context.telesrvCanSendMessagesToPeer(peer) else { return false }
                     switch peer {
                     case let .channel(channel):
                         return channel.participationStatus == .member
@@ -550,7 +550,7 @@ final class ShareScreenState {
         var result = peers.filter { peer in
             let isCommunity: Bool
             if case .community = peer { isCommunity = true } else { isCommunity = false }
-            return seen.insert(peer.id).inserted && (isCommunity || canSendMessagesToPeer(peer)) && (!query.isEmpty || peer.id != self.context.account.peerId)
+            return seen.insert(peer.id).inserted && (isCommunity || self.context.telesrvCanSendMessagesToPeer(peer)) && (!query.isEmpty || peer.id != self.context.account.peerId)
         }
         if query.isEmpty, filterId == 0, let createdGroup = self.createdGroup {
             result.removeAll(where: { $0.id == createdGroup.id })

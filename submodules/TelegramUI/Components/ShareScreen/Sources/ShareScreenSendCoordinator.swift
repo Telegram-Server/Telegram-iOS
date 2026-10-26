@@ -117,6 +117,10 @@ final class ShareScreenSendCoordinator {
                     self.premiumRequired?(peer)
                     return
                 }
+                if let restriction = context.telesrvPermissions.sendRestriction(peer: peer, accountPeerId: context.account.peerId) {
+                    self.fail(restriction.text(strings: data.strings), peer: peer)
+                    return
+                }
                 if !canSendMessagesToPeer(peer) || self.isRestricted(peer: peer, caption: caption) {
                     self.fail(data.strings.Login_UnknownError, peer: peer)
                     return

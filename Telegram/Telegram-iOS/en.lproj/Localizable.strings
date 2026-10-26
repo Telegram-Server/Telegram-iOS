@@ -17284,3 +17284,9 @@ Error: %8$@";
 "Telesrv.LoginPasswordSettings.Saved" = "Login password saved.";
 "Telesrv.LoginPasswordSettings.Removed" = "Login password removed.";
 "Telesrv.LoginPasswordSettings.EnterCurrent" = "Enter your current login password.";
+
+// telesrv: staff permissions
+"Telesrv.Permission.Denied" = "The administrator has restricted this action.";
+"Telesrv.Permission.SendRestricted" = "The administrator has restricted your ability to send messages.";
+"Telesrv.Permission.SendWhitelistRestricted" = "You can only send messages to selected contacts.";
+"Telesrv.Permission.JoinRestricted" = "The administrator has restricted joining.";

@@ -521,7 +521,7 @@ private func mappedInsertEntries(context: AccountContext, nodeInteraction: ChatL
                     } else {
                         if filter.contains(.onlyWriteable) {
                             if let peer = peer.peers[peer.peerId] {
-                                if !isIncludedCommunityContainer(peer, filter: filter) && !canSendMessagesToPeer(peer) {
+                                if !isIncludedCommunityContainer(peer, filter: filter) && !context.telesrvCanSendMessagesToPeer(peer) {
                                     enabled = false
                                 }
                                 if peerEntry.requiresPremiumForMessaging {
@@ -893,7 +893,7 @@ private func mappedUpdateEntries(context: AccountContext, nodeInteraction: ChatL
                         } else {
                             if filter.contains(.onlyWriteable) {
                                 if let peer = peer.peers[peer.peerId] {
-                                    if !isIncludedCommunityContainer(peer, filter: filter) && !canSendMessagesToPeer(peer) {
+                                    if !isIncludedCommunityContainer(peer, filter: filter) && !context.telesrvCanSendMessagesToPeer(peer) {
                                         enabled = false
                                     }
                                     if peerEntry.requiresPremiumForMessaging {
@@ -2306,7 +2306,7 @@ public final class ChatListNode: ListViewImpl {
                         
                         if filter.contains(.onlyWriteable) && filter.contains(.excludeDisabled) {
                             if let peer = peer.peers[peer.peerId] {
-                                if !isIncludedCommunityContainer(peer, filter: filter) && !canSendMessagesToPeer(peer) {
+                                if !isIncludedCommunityContainer(peer, filter: filter) && !context.telesrvCanSendMessagesToPeer(peer) {
                                     return false
                                 }
                             } else {

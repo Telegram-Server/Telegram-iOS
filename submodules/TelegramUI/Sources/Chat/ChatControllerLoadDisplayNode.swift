@@ -5221,6 +5221,13 @@ extension ChatControllerImpl {
                     isScheduledMessages = false
                 }
             
+                // telesrv staff permissions change while the chat is open (the server sends updateConfig):
+                // the input panel is chosen at layout, so a layout pass applies the new ones.
+                self.telesrvPermissionsDisposable.set((self.context.telesrvPermissionsSignal
+                |> deliverOnMainQueue).startStrict(next: { [weak self] _ in
+                    self?.requestLayout(transition: .animated(duration: 0.2, curve: .easeInOut))
+                }))
+                
                 self.failedMessageEventsDisposable.set((self.context.account.pendingMessageManager.failedMessageEvents(peerId: peerId, isScheduled: isScheduledMessages)
                 |> deliverOnMainQueue).startStrict(next: { [weak self] reason in
                     guard let strongSelf = self else {

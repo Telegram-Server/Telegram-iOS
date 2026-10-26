@@ -1647,6 +1647,11 @@ public class Account {
         self.networkTypeDisposable?.dispose()
     }
     
+    /// telesrv: fetches the app config again (the staff permissions in it are stale after a refusal).
+    func telesrvReloadAppConfiguration() {
+        self.taskManager?.reloadAppConfiguration()
+    }
+    
     private func restartConfigurationUpdates() {
         self.managedOperationsDisposable.add(managedConfigurationUpdates(accountManager: self.accountManager, postbox: self.postbox, network: self.network).start())
     }

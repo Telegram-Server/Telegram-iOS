@@ -11,6 +11,22 @@ private enum EphemeralDeleteMessageRequest {
 
 func _internal_deleteMessagesInteractively(account: Account, messageIds: [MessageId], type: InteractiveMessagesDeletionType, deleteAllInGroup: Bool = false) -> Signal<Void, NoError> {
     return account.postbox.transaction { transaction -> [EphemeralDeleteMessageRequest] in
+        // telesrv staff permissions: the deletion would be refused by the server, but only after the
+        // messages were removed here, so messages the chat has are not deleted at all. Messages that
+        // never reached it (sending, failed) still are.
+        var messageIds = messageIds
+        if !telesrvCurrentPermissions(transaction: transaction).allows(.delete) {
+            messageIds = messageIds.filter { messageId in
+                if messageId.namespace != Namespaces.Message.Cloud {
+                    return true
+                }
+                if let message = transaction.getMessage(messageId), message.flags.contains(.Failed) || message.flags.contains(.Unsent) {
+                    return true
+                }
+                return false
+            }
+        }
+        
         var ephemeralRequests: [EphemeralDeleteMessageRequest] = []
         for messageId in messageIds where messageId.namespace == Namespaces.Message.EphemeralLocal || messageId.namespace == Namespaces.Message.WelcomeMessageCloud {
             guard let message = transaction.getMessage(messageId), let peer = transaction.getPeer(messageId.peerId), let inputPeer = apiInputPeer(peer), let attribute = message.attributes.first(where: { $0 is EphemeralMessageAttribute }) as? EphemeralMessageAttribute else {
@@ -173,6 +189,9 @@ func deleteMessagesInteractively(transaction: Transaction, stateManager: Account
 
 func _internal_clearHistoryInRangeInteractively(postbox: Postbox, peerId: PeerId, threadId: Int64?, minTimestamp: Int32, maxTimestamp: Int32, type: InteractiveHistoryClearingType) -> Signal<Void, NoError> {
     return postbox.transaction { transaction -> Void in
+        if type != .scheduledMessages && !telesrvCurrentPermissions(transaction: transaction).canClearHistory(peerId: peerId) {
+            return
+        }
         if peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.CloudGroup || peerId.namespace == Namespaces.Peer.CloudChannel {
             cloudChatAddClearHistoryOperation(transaction: transaction, peerId: peerId, threadId: threadId, explicitTopMessageId: nil, minTimestamp: minTimestamp, maxTimestamp: maxTimestamp, type: CloudChatClearHistoryType(type))
             if type == .scheduledMessages {
@@ -206,6 +225,11 @@ func _internal_clearHistoryInRangeInteractively(postbox: Postbox, peerId: PeerId
 
 func _internal_clearHistoryInteractively(postbox: Postbox, peerId: PeerId, threadId: Int64?, type: InteractiveHistoryClearingType) -> Signal<Void, NoError> {
     return postbox.transaction { transaction -> Void in
+        // telesrv staff permissions: clearing a private chat or Saved Messages would be refused by the
+        // server only after the history was removed here.
+        if type != .scheduledMessages && !telesrvCurrentPermissions(transaction: transaction).canClearHistory(peerId: peerId) {
+            return
+        }
         if peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.CloudGroup || peerId.namespace == Namespaces.Peer.CloudChannel {
             cloudChatAddClearHistoryOperation(transaction: transaction, peerId: peerId, threadId: threadId, explicitTopMessageId: nil, minTimestamp: nil, maxTimestamp: nil, type: CloudChatClearHistoryType(type))
             if type == .scheduledMessages {

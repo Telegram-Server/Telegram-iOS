@@ -913,6 +913,13 @@ public final class Network: NSObject {
         return self.networkSpeedLimitedEventPipe.signal()
     }
     private let networkSpeedLimitedEventPipe = ValuePipe<NetworkSpeedLimitedEvent>()
+
+    /// telesrv staff permissions: a request answered `403 TELESRV_PERMISSION_*`. The account's cached
+    /// permissions are stale; the app refreshes them and tells the user.
+    public var telesrvPermissionDeniedEvents: Signal<Void, NoError> {
+        return self.telesrvPermissionDeniedPipe.signal()
+    }
+    private let telesrvPermissionDeniedPipe = ValuePipe<Void>()
     private let networkSpeedLimitedEventState = Atomic<NetworkSpeedLimitedEventState>(value: NetworkSpeedLimitedEventState())
     
     public func dropConnectionStatus() {
@@ -1332,7 +1339,8 @@ public final class Network: NSObject {
     
     func requestWithAdditionalInfo<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), info: NetworkRequestAdditionalInfo, tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil) -> Signal<NetworkRequestResult<T>, MTRpcError> {
         let requestService = self.requestService
-        return Signal { [requestService] subscriber in
+        let telesrvPermissionDeniedPipe = self.telesrvPermissionDeniedPipe
+        return Signal { [requestService, telesrvPermissionDeniedPipe] subscriber in
             let request = NetworkEngineRequest(
                 payload: data.1.makeData(),
                 metadata: WrappedRequestMetadata(metadata: WrappedFunctionDescription(data.0), tag: tag),
@@ -1367,6 +1375,9 @@ public final class Network: NSObject {
                             subscriber.putError(MTRpcError(errorCode: 500, errorDescription: "TL_VERIFICATION_ERROR"))
                         }
                     case let .failure(failure):
+                        if telesrvIsPermissionError(failure.error) {
+                            telesrvPermissionDeniedPipe.putNext(Void())
+                        }
                         subscriber.putError(failure.error)
                     }
                 }
@@ -1378,7 +1389,8 @@ public final class Network: NSObject {
     
     func request<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil) -> Signal<T, MTRpcError> {
         let requestService = self.requestService
-        return Signal { [requestService] subscriber in
+        let telesrvPermissionDeniedPipe = self.telesrvPermissionDeniedPipe
+        return Signal { [requestService, telesrvPermissionDeniedPipe] subscriber in
             let request = NetworkEngineRequest(
                 payload: data.1.makeData(),
                 metadata: WrappedRequestMetadata(metadata: WrappedFunctionDescription(data.0), tag: tag),
@@ -1405,6 +1417,9 @@ public final class Network: NSObject {
                             subscriber.putError(MTRpcError(errorCode: 500, errorDescription: "TL_VERIFICATION_ERROR"))
                         }
                     case let .failure(failure):
+                        if telesrvIsPermissionError(failure.error) {
+                            telesrvPermissionDeniedPipe.putNext(Void())
+                        }
                         subscriber.putError(failure.error)
                     }
                 }

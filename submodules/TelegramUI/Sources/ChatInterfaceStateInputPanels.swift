@@ -470,6 +470,20 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
         displayInputTextPanel = false
     }
     
+    // telesrv staff permissions: a chat the account may not send to says why in place of the input
+    // field. Editing a message is the edit permission's concern, so an edit keeps the field.
+    if displayInputTextPanel, chatPresentationInterfaceState.interfaceState.editMessage == nil, telesrvSendRestriction(context: context, state: chatPresentationInterfaceState) != nil {
+        if let currentPanel = (currentPanel as? ChatRestrictedInputPanelNode) ?? (currentSecondaryPanel as? ChatRestrictedInputPanelNode) {
+            return (currentPanel, nil)
+        } else {
+            let panel = ChatRestrictedInputPanelNode()
+            panel.context = context
+            panel.chatControllerInteraction = chatControllerInteraction
+            panel.interfaceInteraction = interfaceInteraction
+            return (panel, nil)
+        }
+    }
+    
     if displayInputTextPanel {
         if let currentPanel = (currentPanel as? ChatTextInputPanelNode) ?? (currentSecondaryPanel as? ChatTextInputPanelNode) {
             currentPanel.chatControllerInteraction = chatControllerInteraction

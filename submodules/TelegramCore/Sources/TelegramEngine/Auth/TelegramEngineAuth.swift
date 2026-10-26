@@ -102,6 +102,16 @@ public extension TelegramEngine {
             return _internal_updateTwoStepVerificationPassword(network: self.account.network, currentPassword: currentPassword, updatedPassword: updatedPassword)
         }
 
+        /// telesrv: requests answered `403 TELESRV_PERMISSION_*`.
+        public var telesrvPermissionDeniedEvents: Signal<Void, NoError> {
+            return self.account.network.telesrvPermissionDeniedEvents
+        }
+        
+        /// telesrv: fetches the app config, and with it the staff permissions, again.
+        public func telesrvReloadAppConfiguration() {
+            self.account.telesrvReloadAppConfiguration()
+        }
+        
         /// Whether the account has a telesrv login password (`telesrv.getMyLoginPassword`).
         public func telesrvLoginPasswordState() -> Signal<TelesrvLoginPasswordState, TelesrvLoginPasswordError> {
             return _internal_telesrvLoginPasswordState(network: self.account.network)

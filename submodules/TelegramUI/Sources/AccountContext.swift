@@ -30,6 +30,7 @@ import DirectMediaImageCache
 import WalletContext
 import WalletConnectScreen
 import AlertUI
+import UndoUI
 import MetalEngine
 
 private final class DeviceSpecificContactImportContext {
@@ -311,6 +312,11 @@ public final class AccountContextImpl: AccountContext {
     
     private var isFrozenDisposable: Disposable?
     public private(set) var isFrozen: Bool
+    
+    /// telesrv: a request refused for a staff permission refreshes the permissions and says so.
+    private var telesrvPermissionDeniedDisposable: Disposable?
+    private var telesrvLastPermissionRefresh: Double = 0.0
+    private var telesrvLastPermissionNotice: Double = 0.0
     
     public let imageCache: AnyObject?
     
@@ -628,6 +634,25 @@ public final class AccountContextImpl: AccountContext {
             self.isFrozen = isFrozen
         })
         
+        if !temp {
+            self.telesrvPermissionDeniedDisposable = (self.engine.auth.telesrvPermissionDeniedEvents
+            |> deliverOnMainQueue).startStrict(next: { [weak self] _ in
+                guard let self else {
+                    return
+                }
+                let timestamp = CFAbsoluteTimeGetCurrent()
+                if timestamp - self.telesrvLastPermissionRefresh > 30.0 {
+                    self.telesrvLastPermissionRefresh = timestamp
+                    self.engine.auth.telesrvReloadAppConfiguration()
+                }
+                if timestamp - self.telesrvLastPermissionNotice > 2.0 {
+                    self.telesrvLastPermissionNotice = timestamp
+                    let presentationData = self.sharedContext.currentPresentationData.with { $0 }
+                    self.sharedContext.presentGlobalController(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: presentationData.strings.Telesrv_Permission_Denied, timeout: nil, customUndoText: nil), action: { _ in return false }), nil)
+                }
+            })
+        }
+        
         self.experimentalUISettingsDisposable = (sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.experimentalUISettings])
         |> deliverOnMainQueue).start(next: { [weak self] sharedData in
             guard let self else {
@@ -707,6 +732,7 @@ public final class AccountContextImpl: AccountContext {
         self.userLimitsConfigurationDisposable?.dispose()
         self.peerNameColorsConfigurationDisposable?.dispose()
         self.isFrozenDisposable?.dispose()
+        self.telesrvPermissionDeniedDisposable?.dispose()
     }
     
     public func storeSecureIdPassword(password: String) {
