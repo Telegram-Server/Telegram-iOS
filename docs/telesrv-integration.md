@@ -23,13 +23,46 @@
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| 0 | 产品身份：`build-system/darkmoon-configuration.json`；`Telegram/BUILD` 里只给官方 bundle id 的能力（associated domains、communication notifications）改为也给 `cc.darkmoon` | 配置文件已加，BUILD 待阶段 2 一起改 |
-| 1 | 连接：`TelesrvServer.swift` 常量；DC 1–5 种子同一地址；初始 DC 统一为 2；RSA 公钥；去掉 DoH/CloudKit 备用地址发现；未登录只预取当前 DC 的 key | 已改，待 Mac 验证 |
-| 2 | 链接：域名常量；`UrlHandling`/`GenerateTextEntities`/`UrlWhitelist`/`ProxySettings` 解析；入口处 `dm://`→`tg://`；53 个文件的 `t.me` 生成改用常量；scheme 和 Universal Links 注册 | 待做 |
-| 3 | TL 和登录：`telesrv.tl` 在构建时拼进 `swift_scheme.tl`；`TelesrvLoginConfiguration`；密码登录、注册；新状态 9/10；AuthorizationUI；隐私与安全里的登录密码管理 | 待做 |
-| 4 | 设备绑定：`BuildConfig.m` 生成并存 keychain 共享组的 `device_id`，写进 `initConnection.params`；`AUTHORIZATIONS_TOO_MUCH`/`DEVICE_ID_REQUIRED` 提示 | 待做 |
-| 5 | 员工权限：`TelesrvPermissions` 模型；集中判断点、零散入口、操作前拦截和 403 兜底，一个权限一个提交 | 待做 |
-| 6 | 本地化：每阶段交付新增的键名和英文原文，供服务端语言包更新 | 随各阶段 |
+| 0 | 产品身份：`build-system/darkmoon-configuration.json`（`team_id` 仍是占位值）；`Telegram/BUILD` 给 `cc.darkmoon` 输出 `darkmoon.cc` 的 Universal Links 和 communication notifications | 已提交 `673e1f6c8f`、`c98b0a8ecb` |
+| 1 | 连接：`TelesrvServer.swift`；DC 1–5 种子同一地址；初始 DC 统一为 2；RSA 公钥；去掉 DoH/CloudKit 备用地址发现；未登录只预取当前 DC 的 key | 已提交 `673e1f6c8f` |
+| 2 | 链接：`TelesrvLinks.swift`（`telesrvLinkHost`、`telesrvUrlScheme`）；解析只认 `darkmoon.cc`；入口处 `dm://`→`tg://`；所有生成的链接用常量；只注册 `dm` scheme | 已提交 `c98b0a8ecb` |
+| 3 | TL 和登录：`telesrv.tl` 由 genrule 拼进 schema；`Telesrv/TelesrvLoginConfiguration.swift`、`TelesrvLoginPassword.swift`；状态 9/10；AuthorizationUI；隐私与安全的“登录密码” | 已提交 `73a2660899` |
+| 4 | 设备绑定：`BuildConfig.m` 的 `device_id`；登录、两步验证、注册、扫码批准的设备错误提示 | 已提交 `a300e06c71` |
+| 5 | 员工权限：`Telesrv/TelesrvPermissions.swift`、`AccountContext/TelesrvPermissionsContext.swift`；TelegramCore 底层拦截删除/清空/删聊天；403 全局提示和刷新；各界面入口 | 已提交 `ffdb9a4fe9`、`a5bcdc70a8` |
+| 6 | 本地化：新增键见下文“文案键” | 随各阶段 |
+
+整个分支只在 Windows 上写成，**一次都没有编译过**，下面的验证全部要在 Mac 上做。
+
+## 在 Mac 上要验证的
+
+1. `Make.py build --continueOnError`（`--configurationPath build-system/darkmoon-configuration.json`，签名用
+   `build-system/fake-codesigning` 加 `--disableProvisioningProfiles`）。`team_id` 占位值能否通过 Make.py 未验证。
+2. TL 生成：只有 `flags:#` 的 `telesrv.getMyLoginPassword` 能否正常生成（生成器源码看没问题）。
+3. 测试：`Make.py test --target //submodules/TelegramCore:TelegramCoreTests`（`TelesrvLoginTests`、
+   `TelesrvPermissionsTests`、`ProxySettingsTests`），`//submodules/UrlWhitelist:UrlWhitelistTests`。
+4. 全新模拟器：握手成功、验证码登录、密码登录/注册/两步验证、登录密码设置页、`dm://` 和 `darkmoon.cc` 链接、
+   服务端设权限后各入口的表现、设备上限时的提示。推送需要真机和证书。
+
+## 员工权限覆盖范围
+
+- **发送**：聊天输入框换成受限面板并说明原因；`ChatController.sendMessages` 最后拦截；权限变化时聊天重新布局；
+  聊天列表/搜索/分享面板/新版分享页/社区/相册的选择器把受限聊天置灰；Story 回复拦截。Siri 和通知快捷回复靠服务端拒绝。
+- **白名单**：同上，另外通讯录列表和联系人搜索把名单外的用户置灰。
+- **删除**：消息菜单去掉已发出消息的删除；TelegramCore 的 `deleteMessagesInteractively` 底层拦截。
+- **编辑**：`canEditMessage(context:)` 统一拦截已发出的消息。
+- **清空记录 / 删除聊天 / 退出**：TelegramCore 底层拦截（先删本地的问题因此不会出现）；聊天列表、聊天页、资料页弹出原因。
+- **加入**：频道/群组底部的加入按钮弹出原因；邀请链接、文件夹链接靠服务端拒绝。
+- **新建群组/频道、添加联系人**：“新建”页按权限隐藏；资料页和聊天顶栏的添加联系人弹出原因；其他入口靠服务端拒绝。
+- 服务端拒绝（`403 TELESRV_PERMISSION_*`）时：全局提示 `Telesrv.Permission.Denied`（2 秒内最多一次），并刷新 app config（30 秒内最多一次）。
+
+## 文案键
+
+新增 43 个，都在 `Telegram/Telegram-iOS/en.lproj/Localizable.strings` 末尾，前缀 `Telesrv.`（登录、注册、登录密码设置、
+设备绑定、员工权限）。服务端 `ios` 语言包补上这些键即可，客户端不用再改。另外这 10 个已有键的英文原文把 `t.me`
+换成了 `darkmoon.cc`，其他语言的服务端语言包里也要改：`Username.LinkHint`、`Channel.Username.LinkHint`、
+`EmptyGroupInfo.Line3`、`PrivacyPhoneNumberSettings.CustomPublicLink`、`Premium.Limits.PublicLinksInfo`、
+`Business.Links.SimpleLinkInfoUsernamePhone`、`Business.Links.SimpleLinkInfoUsername`、
+`Business.Links.SimpleLinkInfoPhone`、`CocoonInfo.IntergrateInfo`、`SocksProxySetup.QrCode.TMeLink`。
 
 ## 不显而易见的点
 
