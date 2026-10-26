@@ -145,8 +145,102 @@ API_AVAILABLE(ios(10))
     return self;
 }
 
+// telesrv device binding (TgSever docs/admin-panel-api.en.md, set-device-limit): a stable id of this
+// device, reported in initConnection.params as "device_id". The app and each of its extensions send
+// their own initConnection, so the id lives in the keychain access group they share. It is kept to
+// this device (never synced or restored elsewhere) and survives reinstalling the app.
+static NSString *const telesrvDeviceIdService = @"telesrv.device";
+static NSString *const telesrvDeviceIdAccount = @"device_id";
+
+static NSString * _Nullable telesrvReadDeviceId(NSString * _Nullable accessGroup, OSStatus *outStatus) {
+    NSMutableDictionary *query = [@{
+        (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
+        (__bridge id)kSecAttrService: telesrvDeviceIdService,
+        (__bridge id)kSecAttrAccount: telesrvDeviceIdAccount,
+        (__bridge id)kSecReturnData: @YES,
+        (__bridge id)kSecMatchLimit: (__bridge id)kSecMatchLimitOne
+    } mutableCopy];
+    if (accessGroup != nil) {
+        query[(__bridge id)kSecAttrAccessGroup] = accessGroup;
+    }
+    CFTypeRef result = NULL;
+    OSStatus status = SecItemCopyMatching((__bridge CFDictionaryRef)query, &result);
+    *outStatus = status;
+    if (status != errSecSuccess || result == NULL) {
+        if (result != NULL) {
+            CFRelease(result);
+        }
+        return nil;
+    }
+    NSData *data = (__bridge_transfer NSData *)result;
+    NSString *value = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    return value.length != 0 ? value : nil;
+}
+
+static NSString * _Nullable telesrvDeviceIdInAccessGroup(NSString * _Nullable accessGroup, OSStatus *outStatus) {
+    for (int attempt = 0; attempt < 2; attempt++) {
+        OSStatus status = errSecSuccess;
+        NSString *existing = telesrvReadDeviceId(accessGroup, &status);
+        *outStatus = status;
+        if (existing != nil) {
+            return existing;
+        }
+        if (status != errSecItemNotFound) {
+            // The keychain cannot be read now (for example before the first unlock). A new id would
+            // count as another device, so report none.
+            return nil;
+        }
+        NSString *value = [@"ios-" stringByAppendingString:[[NSUUID UUID].UUIDString lowercaseString]];
+        NSMutableDictionary *attributes = [@{
+            (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
+            (__bridge id)kSecAttrService: telesrvDeviceIdService,
+            (__bridge id)kSecAttrAccount: telesrvDeviceIdAccount,
+            (__bridge id)kSecValueData: [value dataUsingEncoding:NSUTF8StringEncoding],
+            (__bridge id)kSecAttrAccessible: (__bridge id)kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        } mutableCopy];
+        if (accessGroup != nil) {
+            attributes[(__bridge id)kSecAttrAccessGroup] = accessGroup;
+        }
+        OSStatus addStatus = SecItemAdd((__bridge CFDictionaryRef)attributes, NULL);
+        *outStatus = addStatus;
+        if (addStatus == errSecSuccess) {
+            return value;
+        }
+        if (addStatus != errSecDuplicateItem) {
+            return nil;
+        }
+        // Another process stored one meanwhile; the next attempt reads it.
+    }
+    return nil;
+}
+
++ (NSString * _Nullable)telesrvDeviceIdForBaseAppBundleId:(NSString * _Nonnull)baseAppBundleId {
+    static NSString *cachedDeviceId = nil;
+    @synchronized ([BuildConfig class]) {
+        if (cachedDeviceId != nil) {
+            return cachedDeviceId;
+        }
+        NSString *accessGroup = [self keychainAccessGroupForBaseAppBundleId:baseAppBundleId];
+        OSStatus status = errSecSuccess;
+        NSString *deviceId = telesrvDeviceIdInAccessGroup(accessGroup, &status);
+        if (deviceId == nil && accessGroup != nil && status == errSecMissingEntitlement) {
+            // An unsigned simulator build has no keychain groups; keep the id in the app's own keychain.
+            deviceId = telesrvDeviceIdInAccessGroup(nil, &status);
+        }
+        cachedDeviceId = deviceId;
+        return deviceId;
+    }
+}
+
 - (NSData * _Nullable)bundleDataWithAppToken:(NSData * _Nullable)appToken tokenType:(NSString * _Nullable)tokenType tokenEnvironment:(NSString * _Nullable)tokenEnvironment signatureDict:(NSDictionary * _Nullable)signatureDict {
     NSMutableDictionary *dataDict = [[NSMutableDictionary alloc] initWithDictionary:_dataDict];
+    NSString *baseAppBundleId = _dataDict[@"bundleId"];
+    if (baseAppBundleId != nil) {
+        NSString *deviceId = [BuildConfig telesrvDeviceIdForBaseAppBundleId:baseAppBundleId];
+        if (deviceId != nil) {
+            dataDict[@"device_id"] = deviceId;
+        }
+    }
     if (appToken != nil) {
         dataDict[@"device_token"] = [appToken base64EncodedStringWithOptions:0];
         if (tokenType != nil) {

@@ -686,6 +686,10 @@ public enum AuthorizationCodeVerificationError {
     case codeExpired
     case invalidEmailToken
     case invalidEmailAddress
+    /// telesrv: `AUTHORIZATIONS_TOO_MUCH`, the account is on as many devices as its limit allows.
+    case deviceLimitExceeded
+    /// telesrv: `DEVICE_ID_REQUIRED`, the account has a device limit and the client reported no device id.
+    case deviceIdRequired
 }
 
 private enum AuthorizationCodeResult {
@@ -1090,6 +1094,10 @@ public func authorizeWithCode(accountManager: AccountManager<TelegramAccountMana
                                     return .fail(.invalidEmailToken)
                                 } else if errorDescription == "EMAIL_ADDRESS_INVALID" {
                                     return .fail(.invalidEmailAddress)
+                                } else if errorDescription == "AUTHORIZATIONS_TOO_MUCH" {
+                                    return .fail(.deviceLimitExceeded)
+                                } else if errorDescription == "DEVICE_ID_REQUIRED" {
+                                    return .fail(.deviceIdRequired)
                                 } else {
                                     return .fail(.generic)
                                 }
@@ -1159,6 +1167,10 @@ public enum AuthorizationPasswordVerificationError {
     case limitExceeded
     case invalidPassword
     case generic
+    /// telesrv: `AUTHORIZATIONS_TOO_MUCH`.
+    case deviceLimitExceeded
+    /// telesrv: `DEVICE_ID_REQUIRED`.
+    case deviceIdRequired
 }
 
 public func authorizeWithPassword(accountManager: AccountManager<TelegramAccountManagerTypes>, account: UnauthorizedAccount, password: String, syncContacts: Bool) -> Signal<Void, AuthorizationPasswordVerificationError> {
@@ -1168,6 +1180,10 @@ public func authorizeWithPassword(accountManager: AccountManager<TelegramAccount
             return .fail(.limitExceeded)
         } else if error.errorDescription == "PASSWORD_HASH_INVALID" {
             return .fail(.invalidPassword)
+        } else if error.errorDescription == "AUTHORIZATIONS_TOO_MUCH" {
+            return .fail(.deviceLimitExceeded)
+        } else if error.errorDescription == "DEVICE_ID_REQUIRED" {
+            return .fail(.deviceIdRequired)
         } else {
             return .fail(.generic)
         }
@@ -1503,6 +1519,12 @@ public enum SignUpError {
     case codeExpired
     case invalidFirstName
     case invalidLastName
+    /// telesrv: `SIGN_UP_DISABLED`, sign-up was closed after the code was sent.
+    case signUpDisabled
+    /// telesrv: `AUTHORIZATIONS_TOO_MUCH`.
+    case deviceLimitExceeded
+    /// telesrv: `DEVICE_ID_REQUIRED`.
+    case deviceIdRequired
 }
 
 public func signUpWithName(accountManager: AccountManager<TelegramAccountManagerTypes>, account: UnauthorizedAccount, firstName: String, lastName: String, avatarData: Data?, avatarVideo: Signal<UploadedPeerPhotoData?, NoError>?, videoStartTimestamp: Double?, disableJoinNotifications: Bool = false, forcedPasswordSetupNotice: @escaping (Int32) -> (NoticeEntryKey, CodableEntry)?) -> Signal<Void, SignUpError> {
@@ -1522,6 +1544,12 @@ public func signUpWithName(accountManager: AccountManager<TelegramAccountManager
                     return .invalidFirstName
                 } else if error.errorDescription == "LASTNAME_INVALID" {
                     return .invalidLastName
+                } else if error.errorDescription == "SIGN_UP_DISABLED" {
+                    return .signUpDisabled
+                } else if error.errorDescription == "AUTHORIZATIONS_TOO_MUCH" {
+                    return .deviceLimitExceeded
+                } else if error.errorDescription == "DEVICE_ID_REQUIRED" {
+                    return .deviceIdRequired
                 } else {
                     return .generic
                 }

@@ -513,6 +513,10 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                                                 text = strongSelf.presentationData.strings.Login_InvalidEmailTokenError
                                             case .invalidEmailAddress:
                                                 text = strongSelf.presentationData.strings.Login_InvalidEmailAddressError
+                                            case .deviceLimitExceeded:
+                                                text = strongSelf.presentationData.strings.Telesrv_DeviceLimitExceeded
+                                            case .deviceIdRequired:
+                                                text = strongSelf.presentationData.strings.Telesrv_DeviceIdRequired
                                         }
                                         
                                         if resetCode {
@@ -789,6 +793,10 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                                         text = strongSelf.presentationData.strings.Login_InvalidEmailTokenError
                                     case .invalidEmailAddress:
                                         text = strongSelf.presentationData.strings.Login_InvalidEmailAddressError
+                                    case .deviceLimitExceeded:
+                                        text = strongSelf.presentationData.strings.Telesrv_DeviceLimitExceeded
+                                    case .deviceIdRequired:
+                                        text = strongSelf.presentationData.strings.Telesrv_DeviceIdRequired
                                 }
                                 
                                 lastController.present(textAlertController(sharedContext: strongSelf.sharedContext, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
@@ -852,6 +860,10 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                                         text = strongSelf.presentationData.strings.LoginPassword_InvalidPasswordError
                                     case .generic:
                                         text = strongSelf.presentationData.strings.Login_UnknownError
+                                    case .deviceLimitExceeded:
+                                        text = strongSelf.presentationData.strings.Telesrv_DeviceLimitExceeded
+                                    case .deviceIdRequired:
+                                        text = strongSelf.presentationData.strings.Telesrv_DeviceIdRequired
                                 }
                                 
                                 controller.present(textAlertController(sharedContext: strongSelf.sharedContext, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
@@ -1075,6 +1087,12 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                                         text = strongSelf.presentationData.strings.Login_InvalidLastNameError
                                     case .generic:
                                         text = strongSelf.presentationData.strings.Login_UnknownError
+                                    case .signUpDisabled:
+                                        text = strongSelf.presentationData.strings.Telesrv_SignUpDisabled
+                                    case .deviceLimitExceeded:
+                                        text = strongSelf.presentationData.strings.Telesrv_DeviceLimitExceeded
+                                    case .deviceIdRequired:
+                                        text = strongSelf.presentationData.strings.Telesrv_DeviceIdRequired
                                 }
                                 
                                 controller.present(textAlertController(sharedContext: strongSelf.sharedContext, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))

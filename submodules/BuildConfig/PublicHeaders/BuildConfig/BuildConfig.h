@@ -23,6 +23,10 @@
 
 + (NSString * _Nullable)keychainAccessGroupForBaseAppBundleId:(NSString * _Nonnull)baseAppBundleId NS_SWIFT_NAME(keychainAccessGroup(baseAppBundleId:));
 
+/// The telesrv device id this device reports in initConnection.params (`device_id`), shared by the app
+/// and its extensions. Nil while the keychain cannot be read.
++ (NSString * _Nullable)telesrvDeviceIdForBaseAppBundleId:(NSString * _Nonnull)baseAppBundleId NS_SWIFT_NAME(telesrvDeviceId(baseAppBundleId:));
+
 + (DeviceSpecificEncryptionParameters * _Nonnull)deviceSpecificEncryptionParameters:(NSString * _Nonnull)rootPath baseAppBundleId:(NSString * _Nonnull)baseAppBundleId;
 - (NSData * _Nullable)bundleDataWithAppToken:(NSData * _Nullable)appToken tokenType:(NSString * _Nullable)tokenType tokenEnvironment:(NSString * _Nullable)tokenEnvironment signatureDict:(NSDictionary * _Nullable)signatureDict;
 

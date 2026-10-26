@@ -158,6 +158,10 @@ public enum ApproveAuthTransferTokenError {
     case invalid
     case expired
     case alreadyAccepted
+    /// telesrv: `AUTHORIZATIONS_TOO_MUCH`, the account may not be used on another device.
+    case deviceLimitExceeded
+    /// telesrv: `DEVICE_ID_REQUIRED`, the device being signed in reported no device id.
+    case deviceIdRequired
 }
 
 public func approveAuthTransferToken(account: Account, token: Data, activeSessionsContext: ActiveSessionsContext) -> Signal<RecentAccountSession, ApproveAuthTransferTokenError> {
@@ -170,6 +174,10 @@ public func approveAuthTransferToken(account: Account, token: Data, activeSessio
             return .expired
         case "AUTH_TOKEN_ALREADY_ACCEPTED":
             return .alreadyAccepted
+        case "AUTHORIZATIONS_TOO_MUCH":
+            return .deviceLimitExceeded
+        case "DEVICE_ID_REQUIRED":
+            return .deviceIdRequired
         default:
             return .generic
         }

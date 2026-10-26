@@ -262,12 +262,27 @@ public final class QrCodeScanScreen: ViewController {
                                 })
                             }
                             strongSelf.dismissWithSession(session: session)
-                        }, error: { _ in
+                        }, error: { error in
                             guard let strongSelf = self else {
                                 return
                             }
                             strongSelf.controllerNode.codeWithError = code
                             strongSelf.controllerNode.updateFocusedRect(nil)
+
+                            // telesrv device binding: the server refused the other device, which would
+                            // otherwise only read as an invalid code.
+                            let deviceErrorText: String?
+                            switch error {
+                            case .deviceLimitExceeded:
+                                deviceErrorText = strongSelf.presentationData.strings.Telesrv_DeviceLimitExceeded
+                            case .deviceIdRequired:
+                                deviceErrorText = strongSelf.presentationData.strings.Telesrv_DeviceIdRequired
+                            default:
+                                deviceErrorText = nil
+                            }
+                            if let deviceErrorText {
+                                strongSelf.present(textAlertController(context: strongSelf.context, title: nil, text: deviceErrorText, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                            }
                         }))
                     }
                 case .cryptoAddress:
