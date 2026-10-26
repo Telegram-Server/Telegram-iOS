@@ -1,9 +1,9 @@
 name: CI
 
 on:
-  push:
-    branches: [ master ]
-
+  # Upstream's unsigned App Store build. Manual only: a push-triggered run bills GitHub macOS
+  # minutes and cannot build this fork's configuration; DarkMoon builds run in
+  # ios-darkmoon-warp.yml.
   workflow_dispatch:
 
 jobs:

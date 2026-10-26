@@ -152,7 +152,7 @@ API_AVAILABLE(ios(10))
 static NSString *const telesrvDeviceIdService = @"telesrv.device";
 static NSString *const telesrvDeviceIdAccount = @"device_id";
 
-static NSString * _Nullable telesrvReadDeviceId(NSString * _Nullable accessGroup, OSStatus *outStatus) {
+static NSString * _Nullable telesrvReadDeviceId(NSString * _Nullable accessGroup, OSStatus * _Nonnull outStatus) {
     NSMutableDictionary *query = [@{
         (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
         (__bridge id)kSecAttrService: telesrvDeviceIdService,
@@ -177,7 +177,7 @@ static NSString * _Nullable telesrvReadDeviceId(NSString * _Nullable accessGroup
     return value.length != 0 ? value : nil;
 }
 
-static NSString * _Nullable telesrvDeviceIdInAccessGroup(NSString * _Nullable accessGroup, OSStatus *outStatus) {
+static NSString * _Nullable telesrvDeviceIdInAccessGroup(NSString * _Nullable accessGroup, OSStatus * _Nonnull outStatus) {
     for (int attempt = 0; attempt < 2; attempt++) {
         OSStatus status = errSecSuccess;
         NSString *existing = telesrvReadDeviceId(accessGroup, &status);

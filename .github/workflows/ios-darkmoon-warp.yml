@@ -76,6 +76,19 @@ jobs:
           XCODE_VERSION=$(xcodebuild -version | head -1 | awk '{ print $2 }')
           echo "CACHE_KEY_PREFIX=ios-darkmoon-bazel-v1-xcode$XCODE_VERSION-" >> $GITHUB_ENV
 
+      # Xcode 26 起 Metal 编译器（metal）不随 Xcode 安装，要单独下载，否则编译着色器时报
+      # "missing Metal Toolchain"。已经装过时这一步很快就会结束。
+      - name: Install Metal toolchain.
+        run: |
+          for attempt in 1 2 3; do
+            if xcodebuild -downloadComponent MetalToolchain; then
+              break
+            fi
+            echo "Metal toolchain download failed (attempt $attempt), retrying."
+            sleep 10
+          done
+          xcrun -sdk iphoneos metal --version
+
       # 拆成 restore / save 两步：即使编译失败，已经编好的部分也会保存下来，
       # 下次修完代码再编只需要重编改动的部分。
       - name: Bazel cache restore.

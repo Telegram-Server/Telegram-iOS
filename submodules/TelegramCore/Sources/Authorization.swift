@@ -1167,15 +1167,24 @@ public enum AuthorizationPasswordVerificationError {
     case limitExceeded
     case invalidPassword
     case generic
+}
+
+/// `authorizeWithPassword`'s errors: `AuthorizationPasswordVerificationError` plus what only signing in
+/// can answer. A separate type, because the verification error is shared with payments, Passport and
+/// 2FA settings, whose switches the sign-in cases would not belong in.
+public enum AuthorizationPasswordLoginError {
+    case limitExceeded
+    case invalidPassword
+    case generic
     /// telesrv: `AUTHORIZATIONS_TOO_MUCH`.
     case deviceLimitExceeded
     /// telesrv: `DEVICE_ID_REQUIRED`.
     case deviceIdRequired
 }
 
-public func authorizeWithPassword(accountManager: AccountManager<TelegramAccountManagerTypes>, account: UnauthorizedAccount, password: String, syncContacts: Bool) -> Signal<Void, AuthorizationPasswordVerificationError> {
+public func authorizeWithPassword(accountManager: AccountManager<TelegramAccountManagerTypes>, account: UnauthorizedAccount, password: String, syncContacts: Bool) -> Signal<Void, AuthorizationPasswordLoginError> {
     return verifyPassword(account, password: password)
-    |> `catch` { error -> Signal<Api.auth.Authorization, AuthorizationPasswordVerificationError> in
+    |> `catch` { error -> Signal<Api.auth.Authorization, AuthorizationPasswordLoginError> in
         if error.errorDescription.hasPrefix("FLOOD_WAIT") {
             return .fail(.limitExceeded)
         } else if error.errorDescription == "PASSWORD_HASH_INVALID" {
@@ -1188,7 +1197,7 @@ public func authorizeWithPassword(accountManager: AccountManager<TelegramAccount
             return .fail(.generic)
         }
     }
-    |> mapToSignal { result -> Signal<Void, AuthorizationPasswordVerificationError> in
+    |> mapToSignal { result -> Signal<Void, AuthorizationPasswordLoginError> in
         return account.postbox.transaction { transaction -> Signal<Void, NoError> in
             switch result {
             case let .authorization(authorizationData):
@@ -1217,7 +1226,7 @@ public func authorizeWithPassword(accountManager: AccountManager<TelegramAccount
             }
         }
         |> switchToLatest
-        |> mapError { _ -> AuthorizationPasswordVerificationError in
+        |> mapError { _ -> AuthorizationPasswordLoginError in
         }
     }
 }

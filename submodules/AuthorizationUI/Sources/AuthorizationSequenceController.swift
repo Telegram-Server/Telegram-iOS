@@ -246,6 +246,10 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                                 text = strongSelf.presentationData.strings.Login_CodeFloodError
                             case .generic, .invalidEmailAddress, .codeExpired, .invalidEmailToken, .invalidCode:
                                 text = strongSelf.presentationData.strings.Login_UnknownError
+                            case .deviceLimitExceeded:
+                                text = strongSelf.presentationData.strings.Telesrv_DeviceLimitExceeded
+                            case .deviceIdRequired:
+                                text = strongSelf.presentationData.strings.Telesrv_DeviceIdRequired
                             }
                             
                             controller.present(textAlertController(sharedContext: strongSelf.sharedContext, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
