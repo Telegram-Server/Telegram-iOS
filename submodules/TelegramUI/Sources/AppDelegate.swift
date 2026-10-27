@@ -245,6 +245,12 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     @objc var window: UIWindow?
     var nativeWindow: (UIWindow & WindowHost)?
     var mainWindow: Window1!
+    /// A launch that cannot continue, shown once the window is visible (see `makeLaunchFailureAlert`).
+    private var pendingLaunchFailureAlert: UIAlertController?
+    /// Set when the first screen (sign-in or chats) is on screen. Until then the window is blank, and
+    /// a launch that never gets there would leave nothing to report from; see `scheduleLaunchWatchdog`.
+    private var launchUIIsReady = false
+    private var launchWatchdogScheduled = false
     private var statusBarHost: ApplicationStatusBarHost?
     private var dataImportSplash: LegacyDataImportSplash?
     private var memoryUsageOverlayView: UILabel?
@@ -573,8 +579,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         try! PasscodeEnvironment.shared.configure(PasscodeConfiguration(appGroupIdentifier: appGroupName, processRole: .mainApp, biometricKeychainService: walletBiometricKeychainService), privateAccessGroup: {
             BuildConfig.keychainAccessGroup(baseAppBundleId: baseAppBundleId)
         })
-        let maybeAppGroupUrl = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupName)
-        
+        let appDataContainer = AppDataContainer.resolve(appGroupName: appGroupName)
+
         let buildConfig = BuildConfig(baseAppBundleId: baseAppBundleId)
         self.buildConfig = buildConfig
         let signatureDict = BuildConfigExtra.signatureDict()
@@ -696,9 +702,20 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             networkEngineFactory: RustNetworkEngineFactory()
         )
         
-        guard let appGroupUrl = maybeAppGroupUrl else {
-            self.mainWindow?.presentNative(UIAlertController(title: nil, message: "Error 2", preferredStyle: .alert))
+        guard let appGroupUrl = appDataContainer.url else {
+            var details: String?
+            if case let .unavailable(value) = appDataContainer {
+                details = value
+            }
+            self.presentLaunchFailure(makeLaunchFailureAlert(
+                title: "Cannot Start / 无法启动",
+                message: "The app is signed without the App Group it stores its data in. Re-sign it with a provisioning profile that includes this App Group.\n应用签名里缺少存放数据所需的 App Group，请用包含该 App Group 的描述文件重新签名。",
+                details: details
+            ))
             return true
+        }
+        if case .standalone = appDataContainer {
+            NSLog("AppDelegate: no App Group container, keeping the data in the app's own directory")
         }
         
         var isDebugConfiguration = false
@@ -764,7 +781,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             alertController.addAction(UIAlertAction(title: "OK", style: .default, handler: { _ in
                 preconditionFailure()
             }))
-            self.mainWindow?.presentNative(alertController)
+            self.presentLaunchFailure(alertController)
             
             return true
         }
@@ -1426,6 +1443,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
 
                     self.mainWindow.debugAction = nil
                     self.mainWindow.viewController = context.rootController
+                    self.launchUIIsReady = true
                     
                     if firstTime {
                         let layer = context.rootController.view.layer
@@ -1517,6 +1535,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                 |> deliverOnMainQueue).start(next: { _ in
                     progressDisposable.dispose()
                     self.mainWindow.present(context.rootController, on: .root)
+                    self.launchUIIsReady = true
                 }))
             } else {
                 authContextReadyDisposable.set(nil)
@@ -1818,6 +1837,13 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
 
         self.mainWindow?.updateDeviceMetrics()
         self.window?.makeKeyAndVisible()
+
+        if let alert = self.pendingLaunchFailureAlert {
+            self.pendingLaunchFailureAlert = nil
+            self.mainWindow?.presentNative(alert)
+        } else {
+            self.scheduleLaunchWatchdog()
+        }
 
         for context in connectionOptions.urlContexts {
             let url = context.url
@@ -2620,6 +2646,62 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         }
     }
     
+    /// A launch whose first screen has not appeared after a while would otherwise stay blank with no
+    /// way to report it. Offer the logs instead (written to file in internal builds, which DarkMoon
+    /// builds are). It only offers: the launch may still finish, and then the alert does no harm.
+    private func scheduleLaunchWatchdog() {
+        if self.launchWatchdogScheduled {
+            return
+        }
+        self.launchWatchdogScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 20.0, execute: { [weak self] in
+            guard let self, !self.launchUIIsReady else {
+                return
+            }
+            Logger.shared.log("App \(self.episodeId)", "launch watchdog: no screen 20 s after the window appeared")
+            let details = AppDataContainer.diagnostics(appGroupName: "group.\(Bundle.main.bundleIdentifier ?? "")", extensions: AppDataContainer.bundledExtensionNames(), extra: nil)
+            let alert = makeLaunchFailureAlert(
+                title: "Still Starting / 仍在启动",
+                message: "The app has not finished starting. If it stays blank, send the logs to whoever builds the app.\n应用还没有启动完成。如果一直空白，请把日志发给开发人员。",
+                details: details
+            )
+            alert.addAction(UIAlertAction(title: "Share Logs / 分享日志", style: .default, handler: { [weak self] _ in
+                self?.shareLaunchLogs()
+            }))
+            self.mainWindow?.presentNative(alert)
+        })
+    }
+
+    private func shareLaunchLogs() {
+        let _ = (Logger.shared.collectLogs()
+        |> deliverOnMainQueue).start(next: { [weak self] logs in
+            guard let self else {
+                return
+            }
+            let urls = logs.map { URL(fileURLWithPath: $0.1) }
+            if urls.isEmpty {
+                self.mainWindow?.presentNative(makeLaunchFailureAlert(title: "No Logs / 没有日志", message: "No log files were written.\n没有写出日志文件。", details: nil))
+                return
+            }
+            let activityController = UIActivityViewController(activityItems: urls, applicationActivities: nil)
+            if let window = self.window, let popover = activityController.popoverPresentationController {
+                popover.sourceView = window
+                popover.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 1.0, height: 1.0)
+            }
+            self.mainWindow?.presentNative(activityController)
+        })
+    }
+
+    /// Presents an alert for a launch that cannot continue. During `didFinishLaunching` the window is
+    /// not visible yet and a presented alert would be dropped, so it waits for `attach(scene:)`.
+    private func presentLaunchFailure(_ alert: UIAlertController) {
+        if let window = self.window, window.isKeyWindow, !window.isHidden {
+            self.mainWindow?.presentNative(alert)
+        } else {
+            self.pendingLaunchFailureAlert = alert
+        }
+    }
+
     func handleOpenURL(_ url: URL) {
         guard self.openUrlInProgress != telesrvInternalUrl(url) else {
             return
