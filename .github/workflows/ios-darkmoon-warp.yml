@@ -56,19 +56,35 @@ jobs:
 
       - name: Select Xcode.
         run: |
-          # 优先用 versions.json 要求的版本，镜像里没有就取最新的一个，
-          # Make.py 带 --overrideXcodeVersion 会接受实际版本。
+          # 只接受 versions.json 要求的 Xcode，找不到就失败，不退回镜像默认的 Xcode（warp-macos-26 默认
+          # 26.6，编不了这个仓库）。WarpBuild 把预发布版放在 Xcode_<版本>_Beta.app，Apple 正式发布后才
+          # 移到 Xcode_<版本>.app（2026-11 起 27.1 RC 在 _Beta 路径），所以两个路径都认。
           REQUIRED=$(python3 -c 'import json;print(json.load(open("versions.json"))["xcode"])')
-          if [ -d "/Applications/Xcode_$REQUIRED.app" ]; then
-            XCODE="/Applications/Xcode_$REQUIRED.app"
-          elif [ -d /Applications/Xcode.app ]; then
-            XCODE=/Applications/Xcode.app
-          else
-            XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "Installed Xcodes:"
+          for app in /Applications/Xcode*.app; do
+            [ -d "$app" ] || continue
+            VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist" 2>/dev/null || echo "?")
+            echo "  $app ($VERSION)"
+          done
+          XCODE=
+          for candidate in "/Applications/Xcode_$REQUIRED.app" "/Applications/Xcode_${REQUIRED}_Beta.app"; do
+            if [ -d "$candidate" ]; then
+              XCODE="$candidate"
+              break
+            fi
+          done
+          if [ -z "$XCODE" ]; then
+            echo "::error::Xcode $REQUIRED is not installed on this runner (looked for Xcode_$REQUIRED.app and Xcode_${REQUIRED}_Beta.app). Pick another runner or update versions.json."
+            exit 1
           fi
           sudo xcode-select -s "$XCODE/Contents/Developer"
-          echo "Required Xcode $REQUIRED, using $XCODE"
+          ACTUAL=$(xcodebuild -version | head -1 | awk '{ print $2 }')
+          echo "Required Xcode $REQUIRED, using $XCODE ($ACTUAL)"
           xcodebuild -version
+          if [ "$ACTUAL" != "$REQUIRED" ]; then
+            echo "::error::$XCODE reports Xcode $ACTUAL, not the required $REQUIRED."
+            exit 1
+          fi
 
           # Disable spotlight.
           sudo mdutil -a -i off || true
